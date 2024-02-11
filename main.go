@@ -9,44 +9,35 @@ import (
 	"mechfeed/notifications"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
-type RedditResponse struct {
-	Data struct {
-		Children []struct {
-			Data RawRedditPost `json:"data"`
-		} `json:"children"`
-	} `json:"data"`
-}
-
-type RawRedditPost struct {
-	ID   string `json:"id"`
-	Author          string `json:"author"`
-	URL          string `json:"url"`
-	Created         float64  `json:"created"`
-	Title           string `json:"title"`
-	LinkFlairText   string `json:"link_flair_text"`
-}
+var DiscordWebhook string
 
 func main() {
-	godotenv.Load()
-	webhook := os.Getenv("DISCORD_WEBHOOK")
-	monitor(webhook)
+	initApp()
+	monitor()
 }
 
-func monitor(webhook string){
+func initApp() {
+	godotenv.Load()
+	DiscordWebhook = os.Getenv("DISCORD_WEBHOOK")
+}
+
+func monitor() {
 	started := false
 	var currID string
 
 	for {
-		time.Sleep(2*time.Second)
+		time.Sleep(2 * time.Second)
 		fmt.Printf("[%s] Monitoring...\n", time.Now().Format("2006-01-02 15:04:05"))
-		var res RedditResponse;
-	
-		if err:= getLatest(&res); err != nil {
+		var res RedditResponse
+
+		if err := getLatest(&res); err != nil {
 			continue
 		}
 		latestID := res.Data.Children[0].Data.ID
@@ -56,26 +47,20 @@ func monitor(webhook string){
 			continue
 		}
 		if currID == latestID {
-			continue;
+			continue
 		}
 		postPivot := false
-		for i:= len(res.Data.Children)-1; i >= 0; i-- {
+		for i := len(res.Data.Children) - 1; i >= 0; i-- {
 			post := res.Data.Children[i].Data
-			if postPivot{
+			if postPivot {
 				fmt.Printf("Author: %s\n", post.Author)
 				fmt.Printf("Created: %f\n", post.Created)
 				fmt.Printf("Title: %s\n", post.Title)
 				fmt.Printf("Link Flair: %s\n", post.LinkFlairText)
 				fmt.Println("------------")
-				processedPost := notifications.CreateWebhook(notifications.ProcessedRedditPost{
-					Title:     post.Title,
-					URL:       post.URL,
-					Author:    post.Author,
-					Category:  post.LinkFlairText,
-					Imgur:     "https://imgur.com/oVhfdG7",
-					Thumbnail: "https://i.imgur.com/a3Cgynr.jpeg",
-				})
-				notifications.SendWebhook(webhook, processedPost)
+				if err := sendWebhookNotification(post); err != nil {
+					fmt.Println("Failed to send discord notification", err)
+				}
 			} else if post.ID == currID {
 				postPivot = true
 				continue
@@ -89,18 +74,16 @@ func getLatest(result *RedditResponse) error {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "https://www.reddit.com/r/mechmarket/new.json", nil)
 	if err != nil {
-		log.Panic(err)
 		return err
 	}
-	
-	req.Header.Set("User-Agent", "myApp")
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != 200{
+	if resp.StatusCode != 200 {
 		return errors.FetchError{
-			Code: resp.StatusCode,
+			Code:    resp.StatusCode,
 			Message: resp.Status,
 		}
 	}
@@ -116,15 +99,92 @@ func getLatest(result *RedditResponse) error {
 	return nil
 }
 
-func extractPrettifiedJson(bodyText []byte){
+func sendWebhookNotification(post RawRedditPost) error {
+	imgurLinks := extractImgurLinks(post.HTMLText)
+	var imgurAlbumLink string = "No Imgur link found"
+	var thumbnailLink string
+	
+	if len(imgurLinks) > 0 {
+		imgurAlbumLink = imgurLinks[0]
+		splitLinkDot := strings.Split(imgurLinks[0], ".")
+		splitLinkDash := strings.Split(imgurLinks[0], "/")
+		if splitLinkDot[len(splitLinkDot)-1] == "jpeg" {
+			thumbnailLink = imgurLinks[0]
+		} else {
+			imgurAlbumID := splitLinkDash[len(splitLinkDash)-1]
+			albumImages := getImgurAlbumThumnail(imgurAlbumID)
+			if len(albumImages) > 0{
+				thumbnailLink = albumImages[0]
+			}
+		}
+	}
+	processedPost := notifications.CreateWebhook(notifications.ProcessedRedditPost{
+		Title:     post.Title,
+		URL:       post.URL,
+		Author:    post.Author,
+		Category:  post.LinkFlairText,
+		Imgur:     imgurAlbumLink,
+		Thumbnail: thumbnailLink,
+	})
+	return notifications.SendWebhook(DiscordWebhook, processedPost)
+}
+
+func extractImgurLinks(postBody string) []string {
+	// regexPattern := `(^(http|https):\/\/)?(i\.)?imgur\.com\/(?:(?:gallery\/(?<galleryid>\w+))|(?:a\/(?<albumid>\w+))|#?(?<imgid>\w+))`
+	regexPattern := `href="([^"]*imgur[^"]*)"`
+	regex, _ := regexp.Compile(regexPattern)
+	matches := regex.FindAllStringSubmatch(postBody, -1)
+	var imgurLinks []string
+
+	for _, match := range matches {
+		imgurLinks = append(imgurLinks, match[1])
+	}
+
+	return imgurLinks
+}
+
+func getImgurAlbumThumnail(imgurAlbumID string) []string{
+	client := &http.Client{}
+	reqURL := "https://api.imgur.com/post/v1/albums/" + imgurAlbumID + "?client_id=546c25a59c58ad7&include=media%2Cadconfig%2Caccount"
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Set("authority", "api.imgur.com")
+	req.Header.Set("accept", "*/*")
+	req.Header.Set("accept-language", "en-US,en;q=0.9")
+	req.Header.Set("sec-ch-ua", `"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`)
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	bodyText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var albumImages imgurAlbumResponse
+
+	if err:= json.Unmarshal(bodyText, &albumImages); err != nil {
+		log.Fatal(err)
+	}
+
+	var albumImageURLs []string
+	for i:=0; i < len(albumImages.Media); i++ {
+		albumImageURLs = append(albumImageURLs, albumImages.Media[i].URL)
+	}
+	return albumImageURLs
+}
+
+func extractPrettifiedJson(bodyText []byte) {
 	var jsonData interface{}
 
-    // Unmarshal JSON into the struct
-    if err := json.Unmarshal(bodyText, &jsonData); err != nil {
-        log.Fatal(err)
-    }
+	if err := json.Unmarshal(bodyText, &jsonData); err != nil {
+		log.Fatal(err)
+	}
 
 	file, _ := json.MarshalIndent(jsonData, "", " ")
- 
+
 	_ = os.WriteFile("test.json", file, 0644)
 }
