@@ -106,9 +106,9 @@ func sendWebhookNotification(post RawRedditPost) error {
 	
 	if len(imgurLinks) > 0 {
 		imgurAlbumLink = imgurLinks[0]
-		splitLinkDot := strings.Split(imgurLinks[0], ".")
 		splitLinkDash := strings.Split(imgurLinks[0], "/")
-		if splitLinkDot[len(splitLinkDot)-1] == "jpeg" {
+
+		if strings.Contains(splitLinkDash[len(splitLinkDash)-1], ".") {
 			thumbnailLink = imgurLinks[0]
 		} else {
 			imgurAlbumID := splitLinkDash[len(splitLinkDash)-1]
