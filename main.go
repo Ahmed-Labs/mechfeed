@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mechfeed/errors"
+	"mechfeed/fetch-errors"
 	"mechfeed/notifications"
 	"net/http"
 	"os"
 	"regexp"
 	"time"
 	"strings"
+	"errors"
 
 	"github.com/joho/godotenv"
 )
@@ -19,13 +20,21 @@ import (
 var DiscordWebhook string
 
 func main() {
-	initApp()
+	err := initApp()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	monitor()
 }
 
-func initApp() {
+func initApp() error {
 	godotenv.Load()
 	DiscordWebhook = os.Getenv("DISCORD_WEBHOOK")
+	if DiscordWebhook == "" {
+		return errors.New("No Discord Webhook Found")
+	}
+	return nil
 }
 
 func monitor() {
@@ -82,7 +91,7 @@ func getLatest(result *RedditResponse) error {
 		return err
 	}
 	if resp.StatusCode != 200 {
-		return errors.FetchError{
+		return fetcherrors.FetchError{
 			Code:    resp.StatusCode,
 			Message: resp.Status,
 		}
