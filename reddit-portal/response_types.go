@@ -1,4 +1,4 @@
-package main
+package redditportal
 
 type RedditResponse struct {
 	Data struct {
@@ -16,6 +16,7 @@ type RawRedditPost struct {
 	Title         string  `json:"title"`
 	LinkFlairText string  `json:"link_flair_text"`
 	HTMLText      string  `json:"selftext_html"`
+	Content       string  `json:"selftext"`
 }
 
 type imgurAlbumResponse struct {
