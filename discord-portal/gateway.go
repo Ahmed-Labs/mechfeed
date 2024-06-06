@@ -1,4 +1,4 @@
-package main
+package discordportal
 
 import "github.com/gorilla/websocket"
 
@@ -44,7 +44,7 @@ type GatewayHelloPayload struct {
 }
 
 type GatewayHelloData struct {
-	Heartbeat_Interval int `json:"heartbeat_interval,omitempty"`
+	HeartbeatInterval int `json:"heartbeat_interval,omitempty"`
 }
 
 // ---------- Identify payload --------------
@@ -77,18 +77,6 @@ type GatewayReadyData struct {
 	SessionID string `json:"session_id"`
 }
 
-// ---------- Replace Session payload --------------
-
-type GatewayReplaceSessionPayload struct {
-	GatewayEvent
-	Data []GatewayReplaceSessionData `json:"d"`
-}
-
-type GatewayReplaceSessionData struct {
-	SessionID string `json:"session_id"`
-	// More info about client but seems broken
-}
-
 // ---------- Resume payload --------------
 
 type GatewayResumePayload struct {
@@ -101,12 +89,25 @@ type GatewayResumeData struct {
 	Sequence  int    `json:"seq"`
 }
 
-// rsume
-// {
-// 	"op": 6,
-// 	"d": {
-// 	  "token": "my_token",
-// 	  "session_id": "session_id_i_stored",
-// 	  "seq": 1337
-// 	}
-//   }
+// ---------- Message Create payload --------------
+
+type GatewayMessageCreatePayload struct {
+	GatewayEvent
+	Data GatewayMessageCreateData `json:"d"`
+}
+
+type GatewayMessageCreateData struct {
+	ID        string                     `json:"id"`
+	Content   string                     `json:"content"`
+	GuildID   string                     `json:"guild_id"`
+	ChannelID string                     `json:"channel_id"`
+	Timestamp string                     `json:"timestamp"`
+	Author    GatewayMessageCreateAuthor `json:"author"`
+}
+
+type GatewayMessageCreateAuthor struct {
+	Username      string `json:"username"`
+	GlobalName    string `json:"global_name"`
+	Discriminator string `json:"discriminator"`
+	ID            string `json:"id"`
+}

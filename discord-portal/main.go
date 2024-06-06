@@ -1,4 +1,4 @@
-package main
+package discordportal
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"mechfeed/channels"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 )
@@ -41,7 +42,8 @@ func initApp() (GatewayConnection, error) {
 	}, nil
 }
 
-func main() {
+// Connect to discord gateway websocket server and pipe messages through channel
+func Listen() {
 	gateway, err := initApp()
 	if err != nil {
 		log.Fatal(err)
@@ -82,8 +84,8 @@ func (g GatewayConnection) on_message() {
 			if event.Name != "READY" {
 				log.Println(string(json_msg))
 			}
+			// log.Printf("Event %+v", event)
 		}
-		log.Printf("Event %+v", event)
 		
 		if event.OP == 7 {
 			g.resume_connection()
@@ -91,9 +93,8 @@ func (g GatewayConnection) on_message() {
 		if event.OP == 10 { // Hello event
 			var payload GatewayHelloPayload
 			unmarshalJSON(json_msg, &payload)
-			log.Printf("Unmarshalled %+v", payload)
 			g.is_connected = true
-			g.heartbeat_interval = payload.Data.Heartbeat_Interval
+			g.heartbeat_interval = payload.Data.HeartbeatInterval
 			go g.send_heartbeat()
 		}
 		if !g.is_identified && event.OP == 11 {
@@ -104,15 +105,6 @@ func (g GatewayConnection) on_message() {
 				g.is_identified = true
 			}
 		}
-		// if event.Name == "SESSIONS_REPLACE" {
-		// 	var payload GatewayReplaceSessionPayload
-		// 	unmarshalJSON(json_msg, &payload)
-		// 	g.session_id = payload.Data[0].SessionID
-		// 	err := g.resume_connection()
-		// 	if err != nil {
-		// 		log.Fatal(err.Error())
-		// 	}
-		// }
 		if event.Name == "READY" {
 			var payload GatewayReadyPayload
 			unmarshalJSON(json_msg, &payload)
@@ -121,8 +113,10 @@ func (g GatewayConnection) on_message() {
 			log.Printf("Gateway Connection %+v", g)
 		}
 		if event.Name == "MESSAGE_CREATE" {
-			// log.Println(res.Data.Content)
-			log.Println("Message create event")
+			var payload GatewayMessageCreatePayload
+			unmarshalJSON(json_msg, &payload)
+			// log.Printf("Message create event %+v", payload)
+			channels.DiscordChannel <- payload.Data
 		}
 	}
 }
@@ -185,6 +179,7 @@ func (g *GatewayConnection) resume_connection() error {
 	g.conn = c
 	g.is_connected = true
 	g.is_identified = true
+	log.Println("resumed gateway reconnection")
 	return nil
 }
 
