@@ -135,7 +135,16 @@ func sendWebhookNotification(post RawRedditPost) error {
 		Thumbnail: thumbnailLink,
 		Content:   post.Content,
 	}
-	channels.RedditChannel <- processed_post
+	channels.RedditChannel <- channels.RedditMessage{
+		ID:        post.ID,
+		Title:     post.Title,
+		URL:       post.URL,
+		Author:    post.Author,
+		Category:  post.LinkFlairText,
+		Imgur:     imgurAlbumLink,
+		Thumbnail: thumbnailLink,
+		Content:   post.Content,
+	}
 	discord_noti := notifications.CreateNotification(processed_post)
 
 	return notifications.SendWebhook(DiscordWebhook, discord_noti)
@@ -189,14 +198,14 @@ func getImgurAlbumThumnail(imgurAlbumID string) []string {
 	return albumImageURLs
 }
 
-func extractPrettifiedJson(bodyText []byte) {
-	var jsonData interface{}
+// func extractPrettifiedJson(bodyText []byte) {
+// 	var jsonData interface{}
 
-	if err := json.Unmarshal(bodyText, &jsonData); err != nil {
-		log.Fatal(err)
-	}
+// 	if err := json.Unmarshal(bodyText, &jsonData); err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	file, _ := json.MarshalIndent(jsonData, "", " ")
+// 	file, _ := json.MarshalIndent(jsonData, "", " ")
 
-	_ = os.WriteFile("test.json", file, 0644)
-}
+// 	_ = os.WriteFile("test.json", file, 0644)
+// }

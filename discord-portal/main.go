@@ -116,7 +116,19 @@ func (g GatewayConnection) on_message() {
 			var payload GatewayMessageCreatePayload
 			unmarshalJSON(json_msg, &payload)
 			// log.Printf("Message create event %+v", payload)
-			channels.DiscordChannel <- payload.Data
+			channels.DiscordChannel <- channels.DiscordMessage{
+				ID: payload.Data.ID,
+				Content: payload.Data.Content,
+				GuildID: payload.Data.GuildID,
+				ChannelID: payload.Data.ChannelID,
+				Timestamp: payload.Data.Timestamp,
+				Author: channels.DiscordMessageAuthor{
+					Username: payload.Data.Author.Username,
+					GlobalName: payload.Data.Author.GlobalName,
+					Discriminator: payload.Data.Author.Discriminator,
+					ID: payload.Data.Author.ID,
+				},
+			}
 		}
 	}
 }
