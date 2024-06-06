@@ -33,7 +33,7 @@ func SendWebhook(webhookURL string, message DiscordNoti) error {
 	return nil
 }
 
-func CreateWebhook(postData ProcessedRedditPost) DiscordNoti {
+func CreateNotification(postData ProcessedRedditPost) DiscordNoti {
 	return DiscordNoti{
 		Content: nil,
 		Embeds: []Embed{
