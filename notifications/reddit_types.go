@@ -1,10 +1,12 @@
 package notifications
 
 type ProcessedRedditPost struct {
-	Title string
-	URL string
-	Author string
-	Category string
-	Imgur string
+	ID        string
+	Title     string
+	URL       string
+	Author    string
+	Category  string
+	Imgur     string
 	Thumbnail string
+	Content   string
 }
