@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"mechfeed/channels"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
+	"mechfeed/channels"
 )
 
 var DEBUG bool
@@ -35,10 +35,9 @@ func initApp() (GatewayConnection, error) {
 	}
 
 	return GatewayConnection{
-		token:              discordToken,
-		is_connected:       false,
-		heartbeat_interval: 0,
-		conn:               c,
+		token:        discordToken,
+		is_connected: false,
+		conn:         c,
 	}, nil
 }
 
@@ -49,18 +48,13 @@ func Listen() {
 		log.Fatal(err)
 	}
 	defer gateway.conn.Close()
-	gateway.conn.SetCloseHandler(func(code int, text string) error {
-		if code != 4007 {
-			gateway.resume_connection()
-		}
-		return nil
-	})
-
 	go gateway.on_message()
+
 	for {
 		continue
 	}
 }
+
 func (g *GatewayConnection) on_message() {
 	for {
 		// Read raw message (byte array)
@@ -90,18 +84,18 @@ func (g *GatewayConnection) on_message() {
 				log.Printf("Event %+v", event)
 			}
 		}
-		
-		if event.OP == 7 {
+
+		if event.OP == OP_RECONNECT {
 			g.resume_connection()
 		}
-		if event.OP == 10 { // Hello event
+		if event.OP == OP_HELLO {
 			var payload GatewayHelloPayload
 			unmarshalJSON(json_msg, &payload)
 			g.is_connected = true
 			g.heartbeat_interval = payload.Data.HeartbeatInterval
 			go g.send_heartbeat()
 		}
-		if !g.is_identified && event.OP == 11 {
+		if !g.is_identified && event.OP == OP_HEARTBEAT_ACK {
 			err := g.send_identify()
 			if err != nil {
 				log.Println(err.Error())
@@ -109,28 +103,28 @@ func (g *GatewayConnection) on_message() {
 				g.is_identified = true
 			}
 		}
-		if event.Name == "READY" {
+		if event.Name == READY {
 			var payload GatewayReadyPayload
 			unmarshalJSON(json_msg, &payload)
 			g.resume_gateway_url = payload.Data.ResumeURL
 			g.session_id = payload.Data.SessionID
 			log.Printf("Gateway Connection %+v", g)
 		}
-		if event.Name == "MESSAGE_CREATE" {
+		if event.Name == MESSAGE_CREATE {
 			var payload GatewayMessageCreatePayload
 			unmarshalJSON(json_msg, &payload)
 			// log.Printf("Message create event %+v", payload)
 			channels.DiscordChannel <- channels.DiscordMessage{
-				ID: payload.Data.ID,
-				Content: payload.Data.Content,
-				GuildID: payload.Data.GuildID,
+				ID:        payload.Data.ID,
+				Content:   payload.Data.Content,
+				GuildID:   payload.Data.GuildID,
 				ChannelID: payload.Data.ChannelID,
 				Timestamp: payload.Data.Timestamp,
 				Author: channels.DiscordMessageAuthor{
-					Username: payload.Data.Author.Username,
-					GlobalName: payload.Data.Author.GlobalName,
+					Username:      payload.Data.Author.Username,
+					GlobalName:    payload.Data.Author.GlobalName,
 					Discriminator: payload.Data.Author.Discriminator,
-					ID: payload.Data.Author.ID,
+					ID:            payload.Data.Author.ID,
 				},
 			}
 		}
@@ -140,7 +134,7 @@ func (g *GatewayConnection) on_message() {
 func (g *GatewayConnection) send_heartbeat() {
 	for g.is_connected {
 		heartbeat_payload := GatewayHeartbeat{
-			GatewayEvent: GatewayEvent{OP: 1},
+			GatewayEvent: GatewayEvent{OP: OP_HEARTBEAT},
 			Sequence:     g.sequence,
 		}
 		err := g.conn.WriteJSON(heartbeat_payload)
@@ -155,7 +149,7 @@ func (g *GatewayConnection) send_heartbeat() {
 
 func (g GatewayConnection) send_identify() error {
 	identify_payload := GatewayIdentifyPayload{
-		GatewayEvent: GatewayEvent{OP: 2},
+		GatewayEvent: GatewayEvent{OP: OP_IDENTIFY},
 		Data: GatewayIdentifyData{
 			Token:   g.token,
 			Intents: GUILD_MESSAGE_INTENT,
@@ -175,13 +169,14 @@ func (g GatewayConnection) send_identify() error {
 
 func (g *GatewayConnection) resume_connection() error {
 	g.is_connected = false
+	g.conn.Close()
 	c, _, err := websocket.DefaultDialer.Dial(g.resume_gateway_url, nil)
 	if err != nil {
 		return errors.New("failed to resume connection")
 	}
 
 	resume_payload := GatewayResumePayload{
-		GatewayEvent: GatewayEvent{OP: 6},
+		GatewayEvent: GatewayEvent{OP: OP_RESUME},
 		Data: GatewayResumeData{
 			Token:     g.token,
 			SessionID: g.session_id,
