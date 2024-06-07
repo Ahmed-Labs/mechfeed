@@ -26,7 +26,7 @@ func initApp() (GatewayConnection, error) {
 		return GatewayConnection{}, errors.New("no discord token found")
 	}
 
-	DEBUG = os.Getenv("DEBUG") == "true"
+	DEBUG = os.Getenv("DEBUG_DISCORD_PORTAL") == "true"
 
 	// Establish connection with gateway
 	c, _, err := websocket.DefaultDialer.Dial(GATEWAY_URL, nil)
@@ -61,14 +61,18 @@ func Listen() {
 		continue
 	}
 }
-func (g GatewayConnection) on_message() {
+func (g *GatewayConnection) on_message() {
 	for {
 		// Read raw message (byte array)
 		_, json_msg, err := g.conn.ReadMessage()
 
 		if err != nil {
-			log.Println(string(json_msg))
-			log.Fatal("read:", err)
+			log.Println(string(json_msg), err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error: %v", err)
+				g.resume_connection()
+			}
+			continue
 		}
 
 		// Unmarshal Event name and OP code first
@@ -80,11 +84,11 @@ func (g GatewayConnection) on_message() {
 		}
 
 		if DEBUG {
-			// Print raw json string in DEBUG mode
 			if event.Name != "READY" {
 				log.Println(string(json_msg))
+			} else {
+				log.Printf("Event %+v", event)
 			}
-			// log.Printf("Event %+v", event)
 		}
 		
 		if event.OP == 7 {
