@@ -6,6 +6,7 @@ import (
 	"log"
 	"mechfeed/channels"
 	"mechfeed/discord-portal"
+	"mechfeed/filter"
 	"mechfeed/reddit-portal"
 	"os"
 
@@ -13,10 +14,10 @@ import (
 )
 
 var DISCORD_CHANNELS = make(map[string]Channel) // Discord channels indexed by channel ID
-var DISCORD_SERVERS = make(map[string]Server) // Discord servers indexed by channel ID
+var DISCORD_SERVERS = make(map[string]Server)   // Discord servers indexed by channel ID
 var DISCORD_WEBHOOK_URL string
 
-func load_config() error{
+func load_config() error {
 
 	godotenv.Load()
 	DISCORD_WEBHOOK_URL = os.Getenv("DISCORD_WEBHOOK")
@@ -60,13 +61,21 @@ func discord_handler(msg channels.DiscordMessage) error {
 	}
 	msg_server := DISCORD_SERVERS[msg.ChannelID]
 
-	log.Printf("Server: %s, Channel: %s ", msg_server.Name, msg_channel.Name)
-	PrettyPrint(msg)
+	for _, keyword := range Keywords {
+		if filter.FilterKeywords(msg.Content, keyword) {
+			log.Printf("Server: %s, Channel: %s ", msg_server.Name, msg_channel.Name)
+			PrettyPrint(msg)
+		}
+	}
 	return nil
 }
 
 func reddit_handler(msg channels.RedditMessage) {
-	PrettyPrint(msg)
+	for _, keyword := range Keywords {
+		if filter.FilterKeywords(msg.Content, keyword) {
+			PrettyPrint(msg)
+		}
+	}
 }
 
 func PrettyPrint(data interface{}) {
