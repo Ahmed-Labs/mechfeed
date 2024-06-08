@@ -48,27 +48,26 @@ func Listen() {
 		log.Fatal(err)
 	}
 	defer gateway.conn.Close()
-	go gateway.on_message()
-
-	for {
-		continue
-	}
+	gateway.on_message()
+	panic("gateway listener execution ended")
 }
 
-func (g *GatewayConnection) on_message() {
+func (g *GatewayConnection) on_message() error {
 	for {
-		// Read raw message (byte array)
+		// Read raw message (json)
 		_, json_msg, err := g.conn.ReadMessage()
 
 		if err != nil {
 			log.Println(string(json_msg), err)
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				log.Printf("unexpected error: %v", err)
+				panic(err)
+			} else {
+				log.Println("Attempting to resume connection...")
 				g.resume_connection()
 			}
 			continue
 		}
-
 		// Unmarshal Event name and OP code first
 		var event GatewayEvent
 		unmarshalJSON(json_msg, &event)
@@ -78,7 +77,7 @@ func (g *GatewayConnection) on_message() {
 		}
 
 		if DEBUG {
-			if event.Name != "READY" {
+			if event.Name != READY {
 				log.Println(string(json_msg))
 			} else {
 				log.Printf("Event %+v", event)
@@ -108,12 +107,11 @@ func (g *GatewayConnection) on_message() {
 			unmarshalJSON(json_msg, &payload)
 			g.resume_gateway_url = payload.Data.ResumeURL
 			g.session_id = payload.Data.SessionID
-			log.Printf("Gateway Connection %+v", g)
+			log.Printf("Gateway connection ready: %+v", g)
 		}
 		if event.Name == MESSAGE_CREATE {
 			var payload GatewayMessageCreatePayload
 			unmarshalJSON(json_msg, &payload)
-			// log.Printf("Message create event %+v", payload)
 			channels.DiscordChannel <- channels.DiscordMessage{
 				ID:        payload.Data.ID,
 				Content:   payload.Data.Content,
@@ -139,7 +137,8 @@ func (g *GatewayConnection) send_heartbeat() {
 		}
 		err := g.conn.WriteJSON(heartbeat_payload)
 		if err != nil {
-			log.Println("Failed to send heartbeat")
+			log.Println("failed to send heartbeat to discord gateway, closing connnection")
+			g.conn.Close()
 			return
 		}
 		log.Println("Sent heartbeat")
@@ -172,7 +171,7 @@ func (g *GatewayConnection) resume_connection() error {
 	g.conn.Close()
 	c, _, err := websocket.DefaultDialer.Dial(g.resume_gateway_url, nil)
 	if err != nil {
-		return errors.New("failed to resume connection")
+		panic("failed to resume connection")
 	}
 
 	resume_payload := GatewayResumePayload{
@@ -185,18 +184,18 @@ func (g *GatewayConnection) resume_connection() error {
 	}
 	err = g.conn.WriteJSON(resume_payload)
 	if err != nil {
-		return errors.New("failed to send gateway resume connection")
+		panic("failed to send gateway resume connection")
 	}
 	g.conn = c
 	g.is_connected = true
 	g.is_identified = true
-	log.Println("resumed gateway reconnection")
+	log.Println("resumed gateway connection")
 	return nil
 }
 
 func unmarshalJSON(data []byte, v interface{}) {
 	err := json.Unmarshal(data, v)
 	if err != nil {
-		log.Fatal("read:", err)
+		log.Panic("read:", err)
 	}
 }

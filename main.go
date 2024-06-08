@@ -9,16 +9,18 @@ import (
 	"mechfeed/filter"
 	"mechfeed/reddit-portal"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
 
-var DISCORD_CHANNELS = make(map[string]Channel) // Discord channels indexed by channel ID
-var DISCORD_SERVERS = make(map[string]Server)   // Discord servers indexed by channel ID
-var DISCORD_WEBHOOK_URL string
+var (
+	DISCORD_CHANNELS    = make(map[string]Channel) // Discord channels indexed by channel ID
+	DISCORD_SERVERS     = make(map[string]Server)  // Discord servers indexed by channel ID
+	DISCORD_WEBHOOK_URL string
+)
 
 func load_config() error {
-
 	godotenv.Load()
 	DISCORD_WEBHOOK_URL = os.Getenv("DISCORD_WEBHOOK")
 	if DISCORD_WEBHOOK_URL == "" {
@@ -38,9 +40,8 @@ func main() {
 	if err := load_config(); err != nil {
 		log.Fatal(err)
 	}
-
-	go discordportal.Listen()
-	go redditportal.Monitor()
+	go portal_supervisor(discordportal.Listen, "discordportal", time.Millisecond*300)
+	go portal_supervisor(redditportal.Monitor, "redditportal", time.Millisecond*300)
 
 	for {
 		select {
@@ -51,6 +52,20 @@ func main() {
 			go reddit_handler(reddit_msg)
 		}
 
+	}
+}
+
+func portal_supervisor(portal func(), name string, restartDelay time.Duration) {
+	for {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[ %s ] Crashed with error: %v. Restarting...\n", name, r)
+					time.Sleep(restartDelay)
+				}
+			}()
+			portal()
+		}()
 	}
 }
 

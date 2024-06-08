@@ -57,8 +57,9 @@ func init_app() error {
 func Monitor() {
 	var err error
 	if err = init_app(); err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
+	defer panic("exited redditportal")
 
 	var currID string
 	check_expiry := 300
@@ -225,23 +226,27 @@ func get_imgur_thumbnail(imgurAlbumID string) []string {
 	reqURL := IMGUR_ALBUM_ENDPOINT + imgurAlbumID + "?client_id=546c25a59c58ad7&include=media%2Cadconfig%2Caccount"
 	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return []string{}
 	}
 	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	resp, err := client.Do(req)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return []string{}
 	}
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return []string{}
 	}
 	var albumImages imgurAlbumResponse
 
 	if err := json.Unmarshal(bodyText, &albumImages); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return []string{}
 	}
 
 	var albumImageURLs []string
