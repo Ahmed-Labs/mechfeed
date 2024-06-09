@@ -86,6 +86,7 @@ func (g *GatewayConnection) on_message() error {
 
 		if event.OP == OP_RECONNECT {
 			g.resume_connection()
+			go g.send_heartbeat()
 		}
 		if event.OP == OP_HELLO {
 			var payload GatewayHelloPayload
@@ -168,7 +169,6 @@ func (g GatewayConnection) send_identify() error {
 
 func (g *GatewayConnection) resume_connection() error {
 	g.is_connected = false
-	g.conn.Close()
 	c, _, err := websocket.DefaultDialer.Dial(g.resume_gateway_url, nil)
 	if err != nil {
 		panic("failed to resume connection")
