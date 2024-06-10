@@ -5,7 +5,7 @@ import "testing"
 func TestFilter(t *testing.T) {
 	t.Run("keywords match", func(t *testing.T) {
 		const content = "HAHhAHAH omg WTB Kaze for free"
-		var Keywords = []string{"WTB,Kaze,-Red", "WTS,unicorn"}
+		var Keywords = "WTB,Kaze,-Red"
 		got := FilterKeywords(content, Keywords)
 		expect := true
 	
@@ -15,7 +15,7 @@ func TestFilter(t *testing.T) {
 	})
 	t.Run("keywords don't match", func(t *testing.T) {
 		const content = "HAHhAHAH omg WTB a red Kaze for free"
-		var Keywords = []string{"WTB,Kaze,-Red", "WTS,unicorn"}
+		var Keywords = "WTB,Kaze,-Red"
 		got := FilterKeywords(content, Keywords)
 		expect := false
 	
@@ -25,7 +25,7 @@ func TestFilter(t *testing.T) {
 	})
 	t.Run("keywords match part of a word", func(t *testing.T) {
 		const content = "HAHhAHAH omg WTbuy a Kamikaze for free"
-		var Keywords = []string{"WTB,Kaze,-Red", "WTS,unicorn"}
+		var Keywords = "WTB,Kaze,-Red"
 		got := FilterKeywords(content, Keywords)
 		expect := true
 	
@@ -35,7 +35,7 @@ func TestFilter(t *testing.T) {
 	})
 	t.Run("empty keywords don't match", func(t *testing.T) {
 		const content = "HAHhAHAH omg WTbuy a Kamikaze for free"
-		var Keywords = []string{",   ,", "  "}
+		var Keywords = ",   ,,"
 		got := FilterKeywords(content, Keywords)
 		expect := false
 	
