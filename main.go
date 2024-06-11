@@ -80,11 +80,11 @@ func main() {
 	if err := load_config(); err != nil {
 		log.Fatal(err)
 	}
-    repo, err := init_db()
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer repo.db.Close() 
+	repo, err := init_db()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer repo.db.Close()
 
 	go portal_supervisor(discordportal.Listen, "discordportal", time.Millisecond*300)
 	go portal_supervisor(redditportal.Monitor, "redditportal", time.Millisecond*300)
@@ -97,7 +97,6 @@ func main() {
 		case reddit_msg := <-channels.RedditChannel:
 			go repo.reddit_handler(reddit_msg)
 		}
-
 	}
 }
 
@@ -132,17 +131,19 @@ func (r *Repository) discord_handler(msg channels.DiscordMessage) {
 	for keyword, user_ids := range alerts {
 		if filter.FilterKeywords(msg.Content, keyword) {
 			for user_id := range user_ids {
-				user, err := r.queries.GetUser(r.ctx, user_id)
-				if err != nil {
-					log.Println("failed to fetch user: ", user_id, " , error: ", err)
-					continue
-				}
-				if user.WebhookUrl.Valid {
-					log.Println("Notifying user through webhook: ", user.WebhookUrl)
-					notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationDiscord(msg_server.Name, msg_channel.Name, keyword, msg))
-				} else {
-					log.Println("Webhook URL invalid: ", user.WebhookUrl)
-				}
+				go func(user_id string) {
+					user, err := r.queries.GetUser(r.ctx, user_id)
+					if err != nil {
+						log.Println("failed to fetch user: ", user_id, " , error: ", err)
+						return
+					}
+					if user.WebhookUrl.Valid {
+						log.Println("Notifying user through webhook: ", user.WebhookUrl)
+						notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationDiscord(msg_server.Name, msg_channel.Name, keyword, msg))
+					} else {
+						log.Println("Webhook URL invalid: ", user.WebhookUrl)
+					}
+				}(user_id)
 			}
 			log.Printf("Server: %s, Channel: %s ", msg_server.Name, msg_channel.Name)
 			PrettyPrint(msg)
@@ -156,21 +157,22 @@ func (r *Repository) reddit_handler(msg channels.RedditMessage) {
 		log.Println(err)
 		return
 	}
-
 	for keyword, user_ids := range alerts {
 		if filter.FilterKeywords(msg.Content, keyword) {
 			for user_id := range user_ids {
-				user, err := r.queries.GetUser(r.ctx, user_id)
-				if err != nil {
-					log.Println("failed to fetch user: ", user_id, " , error: ", err)
-					continue
-				}
-				if user.WebhookUrl.Valid {
-					log.Println("Notifying user through webhook: ", user.WebhookUrl)
-					notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationReddit(msg))
-				} else {
-					log.Println("Webhook URL invalid: ", user.WebhookUrl)
-				}
+				go func(user_id string) {
+					user, err := r.queries.GetUser(r.ctx, user_id)
+					if err != nil {
+						log.Println("failed to fetch user: ", user_id, " , error: ", err)
+						return
+					}
+					if user.WebhookUrl.Valid {
+						log.Println("Notifying user through webhook: ", user.WebhookUrl)
+						notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationReddit(msg))
+					} else {
+						log.Println("Webhook URL invalid: ", user.WebhookUrl)
+					}
+				}(user_id)
 			}
 			PrettyPrint(msg)
 		}
@@ -188,7 +190,7 @@ func (r *Repository) get_grouped_alerts() (map[string]map[string]bool, error) {
 	for _, alert := range alerts {
 		split_keywords := strings.Split(alert.Keyword, ",")
 		sort.Strings(split_keywords)
-		joined_keywords := strings.Join(split_keywords, ",")
+		joined_keywords := strings.ReplaceAll(strings.ToLower(strings.Join(split_keywords, ",")), " ", "")
 
 		if _, ok := group_alerts[joined_keywords]; !ok {
 			group_alerts[joined_keywords] = make(map[string]bool)
