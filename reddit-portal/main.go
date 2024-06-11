@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
+	// "github.com/joho/godotenv"
 )
 const (
 	REDDIT_AUTH_ENDPOINT = "https://www.reddit.com/api/v1/access_token"
@@ -34,7 +34,7 @@ type RedditAuth struct {
 }
 
 func init_app() error {
-	godotenv.Load()
+	// godotenv.Load()
 	DEBUG = os.Getenv("DEBUG_REDDIT_PORTAL") == "true"
 	REDDIT_CLIENT_ID = os.Getenv("REDDIT_CLIENT_ID")
 	REDDIT_CLIENT_SECRET = os.Getenv("REDDIT_CLIENT_SECRET")

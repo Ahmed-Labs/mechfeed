@@ -8,18 +8,18 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/joho/godotenv"
+	// "github.com/joho/godotenv"
 	"mechfeed/channels"
 )
 
 var DEBUG bool
 
 func initApp() (GatewayConnection, error) {
-	err := godotenv.Load()
+	// err := godotenv.Load()
 
-	if err != nil {
-		return GatewayConnection{}, errors.New("error loading .env")
-	}
+	// if err != nil {
+	// 	return GatewayConnection{}, errors.New("error loading .env")
+	// }
 
 	discordToken := os.Getenv("DISCORD_TOKEN")
 	if discordToken == "" {
