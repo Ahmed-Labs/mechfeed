@@ -5,22 +5,21 @@ import (
 	"errors"
 	"log"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
-	// "github.com/joho/godotenv"
 	"mechfeed/channels"
+
+	"github.com/gorilla/websocket"
 )
 
 var DEBUG bool
+var (
+    sending_heartbeat   bool
+    sending_heartbeat_mu sync.Mutex
+)
 
 func initApp() (GatewayConnection, error) {
-	// err := godotenv.Load()
-
-	// if err != nil {
-	// 	return GatewayConnection{}, errors.New("error loading .env")
-	// }
-
 	discordToken := os.Getenv("DISCORD_TOKEN")
 	if discordToken == "" {
 		return GatewayConnection{}, errors.New("no discord token found")
@@ -131,20 +130,35 @@ func (g *GatewayConnection) on_message() error {
 }
 
 func (g *GatewayConnection) send_heartbeat() {
-	for g.is_connected {
-		heartbeat_payload := GatewayHeartbeat{
-			GatewayEvent: GatewayEvent{OP: OP_HEARTBEAT},
-			Sequence:     g.sequence,
-		}
-		err := g.conn.WriteJSON(heartbeat_payload)
-		if err != nil {
-			log.Println("failed to send heartbeat to discord gateway, closing connnection")
-			g.conn.Close()
-			return
-		}
-		log.Println("Sent heartbeat")
-		time.Sleep(time.Duration(g.heartbeat_interval) * time.Millisecond)
+	sending_heartbeat_mu.Lock()
+	start := !sending_heartbeat
+	sending_heartbeat = true
+	sending_heartbeat_mu.Unlock()
+
+	if !start {
+		return;
 	}
+	go func(){
+		log.Println("Started heartbeat")
+		for g.is_connected {
+			heartbeat_payload := GatewayHeartbeat{
+				GatewayEvent: GatewayEvent{OP: OP_HEARTBEAT},
+				Sequence:     g.sequence,
+			}
+			err := g.conn.WriteJSON(heartbeat_payload)
+			if err != nil {
+				log.Println("failed to send heartbeat to discord gateway, closing connnection")
+				g.conn.Close()
+				return
+			}
+			log.Println("Sent heartbeat")
+			time.Sleep(time.Duration(g.heartbeat_interval) * time.Millisecond)
+		}
+		sending_heartbeat_mu.Lock()
+		sending_heartbeat = false
+		sending_heartbeat_mu.Unlock()
+		log.Println("Stopped heartbeat")
+	}()
 }
 
 func (g GatewayConnection) send_identify() error {
