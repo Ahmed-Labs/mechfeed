@@ -3,9 +3,12 @@ package notifications
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mechfeed/channels"
 	"net/http"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func SendWebhook(webhookURL string, message interface{}) error {
@@ -53,7 +56,7 @@ func CreateNotificationReddit(data channels.RedditMessage) DiscordNoti {
 	}
 }
 
-func CreateNotificationDiscord(server, channl, alert string, data channels.DiscordMessage) DiscordNoti {
+func CreateNotificationDiscord(server, channel, alert string, data channels.DiscordMessage) DiscordNoti {
 	return DiscordNoti{
 		Content:  nil,
 		Embeds: []Embed{
@@ -61,8 +64,9 @@ func CreateNotificationDiscord(server, channl, alert string, data channels.Disco
 				Color: 5727730,
 				Fields: []Field{
 					{Name: "Server", Value: server, Inline: true},
-					{Name: "Channel", Value: channl, Inline: true},
-					{Name: "Sent by", Value: "<@!" + data.Author.ID + ">", Inline: true},
+					{Name: "Channel", Value: "#" + channel, Inline: true},
+					{Name: "Sent by", Value: data.Author.GlobalName + " (" + data.Author.Username + ")", Inline: true},
+					{Name: "Jump to message", Value: fmt.Sprintf("https://discord.com/channels/%s/%s/%s", data.GuildID, data.ChannelID, data.ID)},
 					{Name: "Matched alert", Value: alert, Inline: true},
 					{Name: "Message", Value: data.Content},
 				},
@@ -71,5 +75,71 @@ func CreateNotificationDiscord(server, channl, alert string, data channels.Disco
 			},
 		},
 		Username: "mechfeed",
+	}
+}
+
+
+func CreateRedditNotificationMessageEmbed(data channels.RedditMessage) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       data.Title,
+		URL:         data.URL,
+		Color:       0xe671dc, // Color in decimal format
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Posted by",
+				Value:  "u/" + data.Author + " [[PM]](https://www.reddit.com/message/compose/?to=" + data.Author + ")",
+				Inline: true,
+			},
+			{
+				Name:   "Category",
+				Value:  data.Category,
+				Inline: true,
+			},
+			{
+				Name:   "Imgur Link",
+				Value:  data.Imgur,
+			},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: "mechfeed"},
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Image:     &discordgo.MessageEmbedImage{URL: data.Thumbnail},
+	}
+}
+
+func CreateDiscordNotificationMessageEmbed(server, channel, alert string, data channels.DiscordMessage) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Color: 0xe671dc, // Color in decimal format
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Server",
+				Value:  server,
+				Inline: true,
+			},
+			{
+				Name:   "Channel",
+				Value:  "#" + channel,
+				Inline: true,
+			},
+			{
+				Name:   "Sent by",
+				Value:  data.Author.GlobalName + " (" + data.Author.Username + ")",
+				Inline: true,
+			},
+			{
+				Name:   "Jump to message",
+				Value:  fmt.Sprintf("https://discord.com/channels/%s/%s/%s", data.GuildID, data.ChannelID, data.ID),
+			},
+			{
+				Name:   "Matched alert",
+				Value:  alert,
+				Inline: true,
+			},
+			{
+				Name:   "Message",
+				Value:  data.Content,
+			},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: "mechfeed"},
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 }
