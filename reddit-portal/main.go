@@ -12,9 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	// "github.com/joho/godotenv"
 )
+
 const (
 	REDDIT_AUTH_ENDPOINT = "https://www.reddit.com/api/v1/access_token"
 	REDDIT_POST_ENDPOINT = "https://oauth.reddit.com/r/mechmarket/new.json"
@@ -34,7 +33,6 @@ type RedditAuth struct {
 }
 
 func init_app() error {
-	// godotenv.Load()
 	DEBUG = os.Getenv("DEBUG_REDDIT_PORTAL") == "true"
 	REDDIT_CLIENT_ID = os.Getenv("REDDIT_CLIENT_ID")
 	REDDIT_CLIENT_SECRET = os.Getenv("REDDIT_CLIENT_SECRET")
@@ -66,9 +64,13 @@ func Monitor() {
 
 	for {
 		if check_expiry <= 0 && time.Now().After(REDDIT_AUTH.expires_at) {
-			get_reddit_auth()
-			log.Println("Refreshed reddit access token")
+			REDDIT_AUTH, err = get_reddit_auth()
 			check_expiry = 300
+			if err != nil {
+				log.Println("failed to refresh reddit access token")
+			} else {
+				log.Println("refreshed reddit access token")
+			}
 		}
 		check_expiry--
 		time.Sleep(2 * time.Second)
@@ -195,13 +197,17 @@ func process_reddit_post(post RawRedditPost) {
 			}
 		}
 	}
+	category := "No Category"
+	if post.LinkFlairText != "" {
+		category = post.LinkFlairText
+	}
 
 	channels.RedditChannel <- channels.RedditMessage{
 		ID:        post.ID,
 		Title:     post.Title,
 		URL:       post.URL,
 		Author:    post.Author,
-		Category:  post.LinkFlairText,
+		Category:  category,
 		Imgur:     imgurAlbumLink,
 		Thumbnail: thumbnailLink,
 		Content:   post.Content,
