@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
@@ -12,6 +10,7 @@ import (
 	"mechfeed/notifications"
 	"mechfeed/reddit-portal"
 	"mechfeed/users"
+	"mechfeed/bot"
 	"os"
 	"sort"
 	"strings"
@@ -25,27 +24,13 @@ var (
 	DISCORD_CHANNELS    = make(map[string]Channel) // Discord channels indexed by channel ID
 	DISCORD_SERVERS     = make(map[string]Server)  // Discord servers indexed by channel ID
 	DISCORD_WEBHOOK_URL string
-	POSTGRES_CONNECTION string
 )
-
-type Repository struct {
-	db          *sql.DB
-	ctx         context.Context
-	queries     *users.Queries
-	alerts_pool []users.UserAlert
-	users_pool  []users.User
-}
 
 func load_config() error {
 	godotenv.Load()
 	DISCORD_WEBHOOK_URL = os.Getenv("DISCORD_WEBHOOK")
 	if DISCORD_WEBHOOK_URL == "" {
 		return errors.New("no discord weebhook found")
-	}
-
-	POSTGRES_CONNECTION = os.Getenv("POSTGRES_CONNECTION")
-	if POSTGRES_CONNECTION == "" {
-		return errors.New("no postgres connection string found")
 	}
 
 	for _, server := range ServerList {
@@ -57,45 +42,29 @@ func load_config() error {
 	return nil
 }
 
-func init_db() (*Repository, error) {
-	db, err := sql.Open("postgres", POSTGRES_CONNECTION)
-
-	if err != nil {
-		return nil, err
-	}
-	err = db.Ping()
-	if err != nil {
-		return nil, err
-	}
-	log.Println("Successfully connected to database")
-
-	return &Repository{
-		db:      db,
-		ctx:     context.Background(),
-		queries: users.New(db),
-	}, nil
-}
 
 func main() {
 	if err := load_config(); err != nil {
 		log.Fatal(err)
 	}
-	repo, err := init_db()
+
+	repo, err := users.DBConnection()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer repo.db.Close()
+	defer repo.Db.Close()
 
+	go bot.MechfeedBot()
 	go portal_supervisor(discordportal.Listen, "discordportal", time.Millisecond*300)
 	go portal_supervisor(redditportal.Monitor, "redditportal", time.Millisecond*300)
 
 	for {
 		select {
 		case discord_msg := <-channels.DiscordChannel:
-			go repo.discord_handler(discord_msg)
+			go discord_handler(repo, discord_msg)
 
 		case reddit_msg := <-channels.RedditChannel:
-			go repo.reddit_handler(reddit_msg)
+			go reddit_handler(repo, reddit_msg)
 		}
 	}
 }
@@ -114,14 +83,14 @@ func portal_supervisor(portal func(), name string, restartDelay time.Duration) {
 	}
 }
 
-func (r *Repository) discord_handler(msg channels.DiscordMessage) {
+func discord_handler(r *users.Repository, msg channels.DiscordMessage) {
 	msg_channel, ok := DISCORD_CHANNELS[msg.ChannelID]
 	if !ok {
 		return // Channel not being monitored
 	}
 	msg_server := DISCORD_SERVERS[msg.ChannelID]
 
-	alerts, err := r.get_grouped_alerts()
+	alerts, err := get_grouped_alerts(r)
 	if err != nil {
 		log.Println(err)
 		return
@@ -131,19 +100,30 @@ func (r *Repository) discord_handler(msg channels.DiscordMessage) {
 	for keyword, user_ids := range alerts {
 		if filter.FilterKeywords(msg.Content, keyword) {
 			for user_id := range user_ids {
-				go func(user_id string) {
-					user, err := r.queries.GetUser(r.ctx, user_id)
+				go func(user_id, curr_keyword string) {
+					user, err := r.Queries.GetUser(r.Ctx, user_id)
 					if err != nil {
 						log.Println("failed to fetch user: ", user_id, " , error: ", err)
 						return
 					}
+					
+					log.Println("Sending notification via DM to user :", user.Username)
+					bot.SendEmbedDM(
+						user_id, 
+						notifications.CreateDiscordNotificationMessageEmbed(msg_server.Name, msg_channel.Name, curr_keyword, msg),
+					)
 					if user.WebhookUrl.Valid {
 						log.Println("Notifying user through webhook: ", user.WebhookUrl)
-						notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationDiscord(msg_server.Name, msg_channel.Name, keyword, msg))
+						notifications.SendWebhook(
+							user.WebhookUrl.String, 
+							notifications.CreateNotificationDiscord(
+								msg_server.Name, msg_channel.Name, curr_keyword, msg,
+							),
+						)
 					} else {
-						log.Println("Webhook URL invalid: ", user.WebhookUrl)
+						log.Println("user did not set Webhook URL.")
 					}
-				}(user_id)
+				}(user_id, keyword)
 			}
 			log.Printf("Server: %s, Channel: %s ", msg_server.Name, msg_channel.Name)
 			PrettyPrint(msg)
@@ -151,8 +131,8 @@ func (r *Repository) discord_handler(msg channels.DiscordMessage) {
 	}
 }
 
-func (r *Repository) reddit_handler(msg channels.RedditMessage) {
-	alerts, err := r.get_grouped_alerts()
+func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
+	alerts, err := get_grouped_alerts(r)
 	if err != nil {
 		log.Println(err)
 		return
@@ -161,11 +141,16 @@ func (r *Repository) reddit_handler(msg channels.RedditMessage) {
 		if filter.FilterKeywords(msg.Content, keyword) {
 			for user_id := range user_ids {
 				go func(user_id string) {
-					user, err := r.queries.GetUser(r.ctx, user_id)
+					user, err := r.Queries.GetUser(r.Ctx, user_id)
 					if err != nil {
 						log.Println("failed to fetch user: ", user_id, " , error: ", err)
 						return
 					}
+					log.Println("Sending notification via DM to user:", user.Username)
+					bot.SendEmbedDM(
+						user_id, 
+						notifications.CreateRedditNotificationMessageEmbed(msg),
+					)
 					if user.WebhookUrl.Valid {
 						log.Println("Notifying user through webhook: ", user.WebhookUrl)
 						notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationReddit(msg))
@@ -179,8 +164,8 @@ func (r *Repository) reddit_handler(msg channels.RedditMessage) {
 	}
 }
 
-func (r *Repository) get_grouped_alerts() (map[string]map[string]bool, error) {
-	alerts, err := r.queries.GetAlerts(r.ctx)
+func get_grouped_alerts(r *users.Repository) (map[string]map[string]bool, error) {
+	alerts, err := r.Queries.GetAlerts(r.Ctx)
 
 	if err != nil {
 		return nil, err
