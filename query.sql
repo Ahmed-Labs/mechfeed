@@ -5,6 +5,10 @@ SELECT * FROM users;
 SELECT * FROM users 
 WHERE id = $1 LIMIT 1;
 
+-- name: GetUserExistence :one
+SELECT 1 FROM users
+WHERE id = $1 LIMIT 1;
+
 -- name: CreateUser :one
 INSERT INTO users (
   id, username, webhook_url
@@ -30,3 +34,7 @@ INSERT INTO user_alerts (
 -- name: DeleteAlert :exec
 DELETE FROM user_alerts
 WHERE alert_id = $1;
+
+-- name: DeleteAllAlerts :exec
+DELETE FROM user_alerts
+WHERE id = $1;

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"mechfeed/channels"
 	"mechfeed/discord-portal"
@@ -24,13 +23,19 @@ var (
 	DISCORD_CHANNELS    = make(map[string]Channel) // Discord channels indexed by channel ID
 	DISCORD_SERVERS     = make(map[string]Server)  // Discord servers indexed by channel ID
 	DISCORD_WEBHOOK_URL string
+	PUBLIC_MECHMARKET_WEBHOOK_URL string
 )
 
 func load_config() error {
 	godotenv.Load()
 	DISCORD_WEBHOOK_URL = os.Getenv("DISCORD_WEBHOOK")
 	if DISCORD_WEBHOOK_URL == "" {
-		return errors.New("no discord weebhook found")
+		log.Println("no discord webhook found")
+	}
+
+	PUBLIC_MECHMARKET_WEBHOOK_URL = os.Getenv("PUBLIC_MECHMARKET_WEBHOOK")
+	if PUBLIC_MECHMARKET_WEBHOOK_URL == "" {
+		log.Println("no webhook for mechmarket channel found")
 	}
 
 	for _, server := range ServerList {
@@ -95,7 +100,6 @@ func discord_handler(r *users.Repository, msg channels.DiscordMessage) {
 		log.Println(err)
 		return
 	}
-	log.Println("grouped alerts ", alerts)
 
 	for keyword, user_ids := range alerts {
 		if filter.FilterKeywords(msg.Content, keyword) {
@@ -132,6 +136,10 @@ func discord_handler(r *users.Repository, msg channels.DiscordMessage) {
 }
 
 func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
+	// Notify public mechmarket channel
+	notifications.SendWebhook(PUBLIC_MECHMARKET_WEBHOOK_URL, notifications.CreateNotificationReddit(msg))
+
+	// User alerts
 	alerts, err := get_grouped_alerts(r)
 	if err != nil {
 		log.Println(err)
@@ -140,7 +148,7 @@ func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
 	for keyword, user_ids := range alerts {
 		if filter.FilterKeywords(msg.Content, keyword) {
 			for user_id := range user_ids {
-				go func(user_id string) {
+				go func(user_id, keyword string) {
 					user, err := r.Queries.GetUser(r.Ctx, user_id)
 					if err != nil {
 						log.Println("failed to fetch user: ", user_id, " , error: ", err)
@@ -149,7 +157,7 @@ func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
 					log.Println("Sending notification via DM to user:", user.Username)
 					bot.SendEmbedDM(
 						user_id, 
-						notifications.CreateRedditNotificationMessageEmbed(msg),
+						notifications.CreateRedditNotificationMessageEmbed(msg, keyword),
 					)
 					if user.WebhookUrl.Valid {
 						log.Println("Notifying user through webhook: ", user.WebhookUrl)
@@ -157,9 +165,8 @@ func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
 					} else {
 						log.Println("Webhook URL invalid: ", user.WebhookUrl)
 					}
-				}(user_id)
+				}(user_id, keyword)
 			}
-			PrettyPrint(msg)
 		}
 	}
 }

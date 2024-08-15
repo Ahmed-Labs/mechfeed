@@ -24,9 +24,9 @@ var ServerList = []Server{
 		Channels: []Channel{{"selling", "379790816568410112"}},
 		Enabled:  true,
 	},
-	{
-		Name:     "Mechfeed",
-		Channels: []Channel{{"mechfeed", "1113657844856782868"}},
-		Enabled:  true,
-	},
+	// {
+	// 	Name:     "Mechfeed",
+	// 	Channels: []Channel{{"mechfeed", "968791988465983518"}},
+	// 	Enabled:  true,
+	// },
 }

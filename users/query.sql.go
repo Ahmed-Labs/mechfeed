@@ -65,6 +65,16 @@ func (q *Queries) DeleteAlert(ctx context.Context, alertID int32) error {
 	return err
 }
 
+const deleteAllAlerts = `-- name: DeleteAllAlerts :exec
+DELETE FROM user_alerts
+WHERE id = $1
+`
+
+func (q *Queries) DeleteAllAlerts(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteAllAlerts, id)
+	return err
+}
+
 const getAlerts = `-- name: GetAlerts :many
 SELECT alert_id, id, keyword FROM user_alerts
 `
@@ -135,6 +145,18 @@ func (q *Queries) GetUserAlerts(ctx context.Context, id string) ([]UserAlert, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const getUserExistence = `-- name: GetUserExistence :one
+SELECT 1 FROM users
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserExistence(ctx context.Context, id string) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getUserExistence, id)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const getUsers = `-- name: GetUsers :many

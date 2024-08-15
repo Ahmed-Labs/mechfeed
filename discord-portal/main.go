@@ -74,7 +74,6 @@ func (g *GatewayConnection) on_message() error {
 		if event.Sequence != nil {
 			g.sequence = *(event.Sequence)
 		}
-
 		if DEBUG {
 			if event.Name != READY {
 				log.Println(string(json_msg))

@@ -67,7 +67,7 @@ func CreateNotificationDiscord(server, channel, alert string, data channels.Disc
 					{Name: "Channel", Value: "#" + channel, Inline: true},
 					{Name: "Sent by", Value: data.Author.GlobalName + " (" + data.Author.Username + ")", Inline: true},
 					{Name: "Jump to message", Value: fmt.Sprintf("https://discord.com/channels/%s/%s/%s", data.GuildID, data.ChannelID, data.ID)},
-					{Name: "Matched alert", Value: alert, Inline: true},
+					{Name: "Matched alert", Value: fmt.Sprintf("`%s`", alert), Inline: true},
 					{Name: "Message", Value: data.Content},
 				},
 				Footer:    Footer{Text: "mechfeed"},
@@ -79,7 +79,7 @@ func CreateNotificationDiscord(server, channel, alert string, data channels.Disc
 }
 
 
-func CreateRedditNotificationMessageEmbed(data channels.RedditMessage) *discordgo.MessageEmbed {
+func CreateRedditNotificationMessageEmbed(data channels.RedditMessage, alert string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       data.Title,
 		URL:         data.URL,
@@ -98,6 +98,10 @@ func CreateRedditNotificationMessageEmbed(data channels.RedditMessage) *discordg
 			{
 				Name:   "Imgur Link",
 				Value:  data.Imgur,
+			},
+			{
+				Name:   "Matched alert",
+				Value:  fmt.Sprintf("`%s`", alert),
 			},
 		},
 		Footer:    &discordgo.MessageEmbedFooter{Text: "mechfeed"},
@@ -131,7 +135,7 @@ func CreateDiscordNotificationMessageEmbed(server, channel, alert string, data c
 			},
 			{
 				Name:   "Matched alert",
-				Value:  alert,
+				Value:  fmt.Sprintf("`%s`", alert),
 				Inline: true,
 			},
 			{

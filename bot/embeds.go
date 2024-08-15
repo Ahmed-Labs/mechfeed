@@ -1,14 +1,12 @@
 package bot
 
 import (
-	"time"
-
 	"github.com/bwmarrin/discordgo"
 )
 
 
 var MechfeedLogoEmbed *discordgo.MessageEmbed = &discordgo.MessageEmbed{
-	Color: 0xe671dc, // Purple color in hexadecimal format
+	Color: 0xe671dc,
 	Image: &discordgo.MessageEmbedImage{
 		URL: "https://cdn.discordapp.com/attachments/1218992423313739847/1272775005108961362/mechfeed.jpg?ex=66bc3398&is=66bae218&hm=746cdf7f7d3cf710e2e3adb42efd172cc0bfdba33cb58fd04f9c7ee456ec7a58&",
 	},
@@ -35,8 +33,4 @@ var MechfeedIntroEmbed *discordgo.MessageEmbed = &discordgo.MessageEmbed{
 			Inline: false,
 		},
 	},
-	Footer: &discordgo.MessageEmbedFooter{
-		Text: "Happy alerting with Mechfeed!",
-	},
-	Timestamp: time.Now().UTC().Format(time.RFC3339),
 }
