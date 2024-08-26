@@ -12,25 +12,45 @@ var MechfeedLogoEmbed *discordgo.MessageEmbed = &discordgo.MessageEmbed{
 	},
 }
 
+var HelpInformation = []*discordgo.MessageEmbedField{
+	{
+		Name:   "Setting Alerts",
+		Value:  "Use `!add`, example: `!add gmk,dandy,-daisy`\n" +
+				"```- Include 'gmk' and 'dandy' and exclude 'daisy'.\n" +
+				"- Alerts are case-insensitive.\n" +
+				"- For multiple alerts separate them with a space.```",
+		Inline: false,
+	},
+	{
+		Name:   "Viewing Alerts",
+		Value:  "Use `!list` to see a numbered list of your current alerts.\n" +
+				"",
+		Inline: false,
+	},
+	{
+		Name:   "Deleting Alerts",
+		Value:  "Use `!delete`, example: `!delete 3`\n" + 
+				"```- Enter the number that corresponds to the alert you want to delete " +
+				"based on the numbered list you can see with '!list'.\n" +
+				"- For multiple deletions, separate numbers with a space\n" +
+				"- To delete all alerts, use '!delete all'```",
+		Inline: false,
+	},
+}
+
 var MechfeedIntroEmbed *discordgo.MessageEmbed = &discordgo.MessageEmbed{
 	Color: 0xe671dc,
-	Title: "Welcome to Mechfeed!",
-	Description: "Mechfeed is your go-to bot for managing alerts and staying updated. Here's how to get started:",
-	Fields: []*discordgo.MessageEmbedField{
-		{
-			Name:   "Setting Alerts",
-			Value:  "Use `!set alerts <parameters>` to configure your alerts. You can customize them based on your preferences.",
-			Inline: false,
-		},
-		{
-			Name:   "Viewing Alerts",
-			Value:  "Use `!view alerts` to see a list of your current alerts.",
-			Inline: false,
-		},
-		{
-			Name:   "Help",
-			Value:  "Need more help? Use `!help` to see a list of all available commands.",
-			Inline: false,
-		},
-	},
+	Title: "Welcome to mechfeed!",
+ 	Description: "This bot is currently in development. Please share any feedback and suggestions in the mechfeed #feedback channel.",
+	Fields: append(HelpInformation, &discordgo.MessageEmbedField{
+		Name:   "Help",
+		Value:  "Use `!help` to see a list of all available commands.",
+		Inline: false,
+	}),
+}
+
+var MechfeedHelpEmbed *discordgo.MessageEmbed = &discordgo.MessageEmbed{
+	Color: 0xe671dc,
+	Title: "Commands",
+	Fields: HelpInformation,
 }

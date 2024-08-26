@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"mechfeed/users"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -40,6 +42,8 @@ func MechfeedBot() {
 		return
 	}
 	defer dg.Close()
+	BotSession.active = true
+	BotSession.dg = dg
 
 	dg.AddHandler(messageCreate)
 	dg.Identify.Intents = discordgo.IntentsGuildMessages |
@@ -52,19 +56,17 @@ func MechfeedBot() {
 		fmt.Println("error opening connection,", err)
 		return
 	}
-	BotSession.active = true
-	BotSession.dg = dg
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
-	// sc := make(chan os.Signal, 1)
-	// signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	// <-sc
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-sc
 }
 
 var commands = map[string]func(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
 	"!help": handleHelp,
-	"!info": handleInfo,
 	"!start": handleOnboard,
+	// "!info": handleInfo,
 }
 
 var protected_commands = map[string]func(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
@@ -127,8 +129,20 @@ func SendMultipleEmbedsDM(s *discordgo.Session, userID string, embeds []*discord
 		fmt.Println("Error sending DM embeds:", err)
 	}
 }
+
+func SendEmbedDM(s *discordgo.Session, userID string, embed *discordgo.MessageEmbed) {
+	channel, err := s.UserChannelCreate(userID)
+	if err != nil {
+		fmt.Println("Error creating channel:", err)
+		return
+	}
+	_, err = s.ChannelMessageSendEmbed(channel.ID, embed)
+	if err != nil {
+		fmt.Println("Error sending DM embeds:", err)
+	}
+}
 // External use
-func SendEmbedDM(user_id string, embed *discordgo.MessageEmbed) {
+func IsolatedSendEmbedDM(user_id string, embed *discordgo.MessageEmbed) {
 	if !BotSession.active {
 		fmt.Println("bot session inactive.")
 		return
@@ -150,14 +164,14 @@ func SendEmbedDM(user_id string, embed *discordgo.MessageEmbed) {
 // Handlers
 
 func handleHelp(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	SendTextDM(s, m.Author.ID, "Here are the available commands: ...")
+	SendEmbedDM(s, m.Author.ID, MechfeedHelpEmbed)
 	return nil
 }
 
-func handleInfo(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	SendTextDM(s, m.Author.ID, "Info about Mechfeed: ...")
-	return nil
-}
+// func handleInfo(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+// 	SendTextDM(s, m.Author.ID, "Info about Mechfeed: ...")
+// 	return nil
+// }
 
 func handleOnboard(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
 	// Send the onboarding embed

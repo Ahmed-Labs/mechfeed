@@ -181,6 +181,7 @@ func (g GatewayConnection) send_identify() error {
 }
 
 func (g *GatewayConnection) resume_connection() error {
+	g.conn.Close()
 	g.is_connected = false
 	c, _, err := websocket.DefaultDialer.Dial(g.resume_gateway_url, nil)
 	if err != nil {

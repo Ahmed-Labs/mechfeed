@@ -66,9 +66,11 @@ func main() {
 	for {
 		select {
 		case discord_msg := <-channels.DiscordChannel:
+			log.Println(discord_msg)
 			go discord_handler(repo, discord_msg)
 
 		case reddit_msg := <-channels.RedditChannel:
+			log.Println(reddit_msg)
 			go reddit_handler(repo, reddit_msg)
 		}
 	}
@@ -112,7 +114,7 @@ func discord_handler(r *users.Repository, msg channels.DiscordMessage) {
 					}
 					
 					log.Println("Sending notification via DM to user :", user.Username)
-					bot.SendEmbedDM(
+					bot.IsolatedSendEmbedDM(
 						user_id, 
 						notifications.CreateDiscordNotificationMessageEmbed(msg_server.Name, msg_channel.Name, curr_keyword, msg),
 					)
@@ -155,7 +157,7 @@ func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
 						return
 					}
 					log.Println("Sending notification via DM to user:", user.Username)
-					bot.SendEmbedDM(
+					bot.IsolatedSendEmbedDM(
 						user_id, 
 						notifications.CreateRedditNotificationMessageEmbed(msg, keyword),
 					)
