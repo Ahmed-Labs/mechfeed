@@ -12,14 +12,14 @@ func FilterKeywords(content string, keywords string) bool {
 		if len(k) == 0 {
 			return false
 		}
-		var re string = "(?i)"
+		var re string = "(?i)\\b"
 		var filter_condition bool
 
 		if k[0] == '-' && len(k) > 1 {
-			re += regexp.QuoteMeta(k[1:])
+			re += regexp.QuoteMeta(k[1:]) + "\\b"
 			filter_condition = true
 		} else {
-			re += regexp.QuoteMeta(k)
+			re += regexp.QuoteMeta(k) + "\\b"
 			filter_condition = false
 		}
 		c := regexp.MustCompile(re)

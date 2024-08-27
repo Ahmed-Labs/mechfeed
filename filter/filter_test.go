@@ -23,11 +23,11 @@ func TestFilter(t *testing.T) {
 			t.Errorf("got %t expect %t", got, expect)
 		}
 	})
-	t.Run("keywords match part of a word", func(t *testing.T) {
-		const content = "HAHhAHAH omg WTbuy a Kamikaze for free"
+	t.Run("keywords don't match part of a word", func(t *testing.T) {
+		const content = "HAHhAHAH omg WTbuy a kaze for free"
 		var Keywords = "WTB,Kaze,-Red"
 		got := FilterKeywords(content, Keywords)
-		expect := true
+		expect := false
 	
 		if got != expect {
 			t.Errorf("got %t expect %t", got, expect)
