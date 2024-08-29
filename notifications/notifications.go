@@ -111,6 +111,9 @@ func CreateRedditNotificationMessageEmbed(data channels.RedditMessage, alert str
 }
 
 func CreateDiscordNotificationMessageEmbed(server, channel, alert string, data channels.DiscordMessage) *discordgo.MessageEmbed {
+	if len(data.Content) > 1024 {
+		data.Content = data.Content[:1021] + "..."
+	}
 	return &discordgo.MessageEmbed{
 		Color: 0xe671dc, // Color in decimal format
 		Fields: []*discordgo.MessageEmbedField{
