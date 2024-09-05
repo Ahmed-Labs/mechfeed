@@ -43,4 +43,15 @@ func TestFilter(t *testing.T) {
 			t.Errorf("got %t expect %t", got, expect)
 		}
 	})
+	t.Run("weird case", func(t *testing.T) {
+		const content = "buying a set here so I don'rt have to wait for shipping"
+		var Keywords = "buy"
+		got := FilterKeywords(content, Keywords)
+		expect := false
+	
+		if got != expect {
+			t.Errorf("got %t expect %t", got, expect)
+		}
+	})
+	
 }
