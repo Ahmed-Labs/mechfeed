@@ -11,8 +11,6 @@ import (
 	"mechfeed/users"
 	"mechfeed/bot"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -97,101 +95,95 @@ func discord_handler(r *users.Repository, msg channels.DiscordMessage) {
 	}
 	msg_server := DISCORD_SERVERS[msg.ChannelID]
 
-	alerts, err := get_grouped_alerts(r)
+	alerts, err := r.Queries.GetAlerts(r.Ctx)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-
-	for keyword, user_ids := range alerts {
-		if filter.FilterKeywords(msg.Content, keyword) {
-			for user_id := range user_ids {
-				go func(user_id, curr_keyword string) {
-					user, err := r.Queries.GetUser(r.Ctx, user_id)
-					if err != nil {
-						log.Println("failed to fetch user: ", user_id, " , error: ", err)
-						return
-					}
-					
-					log.Println("Sending notification via DM to user :", user.Username)
-					bot.IsolatedSendEmbedDM(
-						user_id, 
-						notifications.CreateDiscordNotificationMessageEmbed(msg_server.Name, msg_channel.Name, curr_keyword, msg),
-					)
-					if user.WebhookUrl.Valid {
-						log.Println("Notifying user through webhook: ", user.WebhookUrl)
-						notifications.SendWebhook(
-							user.WebhookUrl.String, 
-							notifications.CreateNotificationDiscord(
-								msg_server.Name, msg_channel.Name, curr_keyword, msg,
-							),
-						)
-					} else {
-						log.Println("user did not set Webhook URL.")
-					}
-				}(user_id, keyword)
+	
+	// log.Printf("Server: %s, Channel: %s ", msg_server.Name, msg_channel.Name)
+	for _, a := range alerts {
+		go func(alert users.UserAlert) {
+			user, err := r.Queries.GetUser(r.Ctx, alert.ID)
+			if err != nil {
+				log.Println("failed to fetch user: ", alert.ID, " , error: ", err)
+				return
 			}
-			log.Printf("Server: %s, Channel: %s ", msg_server.Name, msg_channel.Name)
-			PrettyPrint(msg)
-		}
+
+			if !filter.FilterKeywords(msg.Content, alert.Keyword) {
+				return
+			}
+
+			for _, u := range alert.Ignored {
+				if u == msg.Author.Username {
+					log.Printf("Skipping alert... '%s' is ignored by %s", u, user.Username)
+					return
+				}
+			}
+
+			log.Println("Sending Discord notification via DM to user:", user.Username, "Keyword:", alert.Keyword, "Message:", msg)
+			bot.IsolatedSendEmbedDM(
+				user.ID, 
+				notifications.CreateDiscordNotificationMessageEmbed(msg_server.Name, msg_channel.Name, alert.Keyword, msg),
+			)
+			if user.WebhookUrl.Valid {
+				log.Println("Notifying user through webhook:", user.WebhookUrl)
+				notifications.SendWebhook(
+					user.WebhookUrl.String, 
+					notifications.CreateNotificationDiscord(
+						msg_server.Name, msg_channel.Name, alert.Keyword, msg,
+					),
+				)
+			} else {
+				log.Println("user did not set Webhook URL.")
+			}
+				
+		}(a)
 	}
 }
+
 
 func reddit_handler(r *users.Repository, msg channels.RedditMessage) {
 	// Notify public mechmarket channel
 	notifications.SendWebhook(PUBLIC_MECHMARKET_WEBHOOK_URL, notifications.CreateNotificationReddit(msg))
 
 	// User alerts
-	alerts, err := get_grouped_alerts(r)
+	alerts, err := r.Queries.GetAlerts(r.Ctx)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	for keyword, user_ids := range alerts {
-		if filter.FilterKeywords(msg.Content, keyword) {
-			for user_id := range user_ids {
-				go func(user_id, keyword string) {
-					user, err := r.Queries.GetUser(r.Ctx, user_id)
-					if err != nil {
-						log.Println("failed to fetch user: ", user_id, " , error: ", err)
-						return
-					}
-					log.Println("Sending notification via DM to user:", user.Username)
-					bot.IsolatedSendEmbedDM(
-						user_id, 
-						notifications.CreateRedditNotificationMessageEmbed(msg, keyword),
-					)
-					if user.WebhookUrl.Valid {
-						log.Println("Notifying user through webhook: ", user.WebhookUrl)
-						notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationReddit(msg))
-					} else {
-						log.Println("Webhook URL invalid: ", user.WebhookUrl)
-					}
-				}(user_id, keyword)
+
+	for _, a := range alerts {
+		go func(alert users.UserAlert) {
+			user, err := r.Queries.GetUser(r.Ctx, alert.ID)
+			if err != nil {
+				log.Println("failed to fetch user: ", alert.ID, " , error: ", err)
+				return
 			}
-		}
+			if !filter.FilterKeywords(msg.Content, alert.Keyword) {
+				return
+			}
+
+			for _, u := range alert.Ignored {
+				if u == msg.Author {
+					log.Printf("Skipping alert... '%s' is ignored by %s", u, user.Username)
+					return
+				}
+			}
+			log.Println("Sending Reddit notification via DM to user:", user.Username, "Keyword:", alert.Keyword, "Message:", msg)
+			bot.IsolatedSendEmbedDM(
+				user.ID, 
+				notifications.CreateRedditNotificationMessageEmbed(msg, alert.Keyword),
+			)
+			if user.WebhookUrl.Valid {
+				log.Println("Notifying user through webhook: ", user.WebhookUrl)
+				notifications.SendWebhook(user.WebhookUrl.String, notifications.CreateNotificationReddit(msg))
+			} else {
+				log.Println("Webhook URL invalid: ", user.WebhookUrl)
+			}
+		}(a)
 	}
-}
-
-func get_grouped_alerts(r *users.Repository) (map[string]map[string]bool, error) {
-	alerts, err := r.Queries.GetAlerts(r.Ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	var group_alerts = make(map[string]map[string]bool)
-
-	for _, alert := range alerts {
-		split_keywords := strings.Split(alert.Keyword, ",")
-		sort.Strings(split_keywords)
-		joined_keywords := strings.ReplaceAll(strings.ToLower(strings.Join(split_keywords, ",")), " ", "")
-
-		if _, ok := group_alerts[joined_keywords]; !ok {
-			group_alerts[joined_keywords] = make(map[string]bool)
-		}
-		group_alerts[joined_keywords][alert.ID] = true
-	}
-	return group_alerts, nil
 }
 
 func PrettyPrint(data interface{}) {

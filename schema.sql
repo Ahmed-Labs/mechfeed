@@ -9,5 +9,6 @@ CREATE TABLE IF NOT EXISTS user_alerts (
     alert_id SERIAL PRIMARY KEY,
     id VARCHAR(36) NOT NULL,
     keyword VARCHAR(255) NOT NULL,
+    ignored VARCHAR(255)[] DEFAULT '{}',
     FOREIGN KEY (id) REFERENCES users(id) ON DELETE CASCADE
 );

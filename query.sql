@@ -38,3 +38,8 @@ WHERE alert_id = $1;
 -- name: DeleteAllAlerts :exec
 DELETE FROM user_alerts
 WHERE id = $1;
+
+-- name: IgnoreUserForAlert :exec
+UPDATE user_alerts
+SET ignored = ignored || $1
+WHERE id = $2 AND keyword = $3;

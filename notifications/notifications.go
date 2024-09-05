@@ -87,7 +87,11 @@ func CreateRedditNotificationMessageEmbed(data channels.RedditMessage, alert str
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Posted by",
-				Value:  "u/" + data.Author + " [[PM]](https://www.reddit.com/message/compose/?to=" + data.Author + ")",
+				Value:  "u/" + data.Author,
+				Inline: true,
+			},
+			{
+				Name:   "u/" + data.Author + " [[PM]](https://www.reddit.com/message/compose/?to=" + data.Author + ")",
 				Inline: true,
 			},
 			{
@@ -129,7 +133,7 @@ func CreateDiscordNotificationMessageEmbed(server, channel, alert string, data c
 			},
 			{
 				Name:   "Sent by",
-				Value:  data.Author.GlobalName + " (" + data.Author.Username + ")",
+				Value:  data.Author.Username,
 				Inline: true,
 			},
 			{

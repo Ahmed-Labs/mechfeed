@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"mechfeed/users"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -46,6 +44,7 @@ func MechfeedBot() {
 	BotSession.dg = dg
 
 	dg.AddHandler(messageCreate)
+	dg.AddHandler(messageReact)
 	dg.Identify.Intents = discordgo.IntentsGuildMessages |
 						  discordgo.IntentsDirectMessages |
 						  discordgo.IntentsDirectMessageReactions
@@ -57,10 +56,8 @@ func MechfeedBot() {
 		return
 	}
 
-	fmt.Println("Bot is now running. Press CTRL-C to exit.")
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
+	fmt.Println("🤖 Mechfeed bot is now running.")
+	select {}
 }
 
 var commands = map[string]func(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
@@ -73,6 +70,70 @@ var protected_commands = map[string]func(s *discordgo.Session, m *discordgo.Mess
 	"!add": handleAdd,
 	"!list": handleList,
 	"!delete": handleDelete,
+}
+func messageReact(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	if r.UserID == s.State.User.ID {
+		fmt.Println("Skipping self reaction by bot...")
+		return
+	}
+
+	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+	if msg.Author.ID != s.State.User.ID {
+		fmt.Println("Reacted to message not sent by bot")
+		return
+	}
+
+	if err != nil {
+		fmt.Println("Error fetching message,", err)
+		return
+	}
+
+	if r.Emoji.Name != "🔕" {
+		fmt.Println("Unexpected reaction emoji:", r.Emoji.Name)
+		return
+	}
+
+	ignored_author := ""
+	alert := ""
+
+	if msg != nil {
+		for _, field := range msg.Embeds[0].Fields {
+			if field.Name == "Sent by" || field.Name == "Posted by" {
+				ignored_author = field.Value
+			} else if field.Name == "Matched alert" {
+				alert = field.Value
+			}
+		}
+	}
+
+	if ignored_author == "" {
+		fmt.Println("No author found, skipping user ignore...")
+		return
+	}
+	if alert == "" {
+		fmt.Println("No alert found, skipping user ignore...")
+	}
+
+	repo, err := users.DBConnection()
+	if err != nil {
+		fmt.Println("Failed to get DB connection.")
+		SendTextDM(s, r.UserID, "Failed add user to ignore list for your alert. Please contact dev or try again later!")
+		return
+	}
+
+	err = repo.Queries.IgnoreUserForAlert(repo.Ctx, users.IgnoreUserForAlertParams{
+		Ignored: []string{ignored_author},
+		ID: r.UserID,
+		Keyword: strings.ReplaceAll(alert, "`", ""),
+	})
+
+	if err != nil {
+		fmt.Println("Failed to run ignore query.")
+		SendTextDM(s, r.UserID, "Failed add user to ignore list for your alert. Please contact dev or try again later!")
+	}
+
+	fmt.Println("Ignoring from Author:", ignored_author)
+	SendTextDM(s, r.UserID, fmt.Sprintf("`Will exclude '%s' from future matches for this alert.`", ignored_author))
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -154,10 +215,16 @@ func IsolatedSendEmbedDM(user_id string, embed *discordgo.MessageEmbed) {
 		return
 	}
 
-	_, err = BotSession.dg.ChannelMessageSendEmbed(channel.ID, embed)
+	m, err := BotSession.dg.ChannelMessageSendEmbed(channel.ID, embed)
 	if err != nil {
 		// dont share server / disabled DM in settings
 		fmt.Println("error sending DM message:", err)
+	}
+
+	// Reaction to add user to ignore list
+	err = BotSession.dg.MessageReactionAdd(channel.ID, m.ID, "🔕")
+	if err != nil {
+		fmt.Println("Error adding reaction,", err)
 	}
 }
 
@@ -215,7 +282,11 @@ func handleList(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 	} else {
 		var sb strings.Builder
 		for i, alert := range alerts {
-			sb.WriteString(fmt.Sprintf("[%d] %s\n", i+1, alert.Keyword))
+			sb.WriteString(fmt.Sprintf("[%d] %s", i+1, alert.Keyword))
+			if len(alert.Ignored) > 0 {
+				sb.WriteString(fmt.Sprintf(" (ignoring: %s)", strings.Join(alert.Ignored, ",")))
+			}
+			sb.WriteString("\n")
 		}
 		SendTextDM(s, m.Author.ID, "```" + sb.String() + "```")
 	}

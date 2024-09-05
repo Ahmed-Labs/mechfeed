@@ -19,4 +19,5 @@ type UserAlert struct {
 	AlertID int32
 	ID      string
 	Keyword string
+	Ignored []string
 }

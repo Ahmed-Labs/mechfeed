@@ -8,6 +8,8 @@ package users
 import (
 	"context"
 	"database/sql"
+
+	"github.com/lib/pq"
 )
 
 const createAlert = `-- name: CreateAlert :exec
@@ -76,7 +78,7 @@ func (q *Queries) DeleteAllAlerts(ctx context.Context, id string) error {
 }
 
 const getAlerts = `-- name: GetAlerts :many
-SELECT alert_id, id, keyword FROM user_alerts
+SELECT alert_id, id, keyword, ignored FROM user_alerts
 `
 
 func (q *Queries) GetAlerts(ctx context.Context) ([]UserAlert, error) {
@@ -88,7 +90,12 @@ func (q *Queries) GetAlerts(ctx context.Context) ([]UserAlert, error) {
 	var items []UserAlert
 	for rows.Next() {
 		var i UserAlert
-		if err := rows.Scan(&i.AlertID, &i.ID, &i.Keyword); err != nil {
+		if err := rows.Scan(
+			&i.AlertID,
+			&i.ID,
+			&i.Keyword,
+			pq.Array(&i.Ignored),
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -120,7 +127,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const getUserAlerts = `-- name: GetUserAlerts :many
-SELECT alert_id, id, keyword FROM user_alerts
+SELECT alert_id, id, keyword, ignored FROM user_alerts
 WHERE id = $1
 `
 
@@ -133,7 +140,12 @@ func (q *Queries) GetUserAlerts(ctx context.Context, id string) ([]UserAlert, er
 	var items []UserAlert
 	for rows.Next() {
 		var i UserAlert
-		if err := rows.Scan(&i.AlertID, &i.ID, &i.Keyword); err != nil {
+		if err := rows.Scan(
+			&i.AlertID,
+			&i.ID,
+			&i.Keyword,
+			pq.Array(&i.Ignored),
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -189,4 +201,21 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const ignoreUserForAlert = `-- name: IgnoreUserForAlert :exec
+UPDATE user_alerts
+SET ignored = ignored || $1
+WHERE id = $2 AND keyword = $3
+`
+
+type IgnoreUserForAlertParams struct {
+	Ignored []string
+	ID      string
+	Keyword string
+}
+
+func (q *Queries) IgnoreUserForAlert(ctx context.Context, arg IgnoreUserForAlertParams) error {
+	_, err := q.db.ExecContext(ctx, ignoreUserForAlert, pq.Array(arg.Ignored), arg.ID, arg.Keyword)
+	return err
 }
