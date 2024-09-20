@@ -90,8 +90,9 @@ func CreateRedditNotificationMessageEmbed(data channels.RedditMessage, alert str
 				Value:  "u/" + data.Author,
 				Inline: true,
 			},
-			{
-				Name:   "u/" + data.Author + " [[PM]](https://www.reddit.com/message/compose/?to=" + data.Author + ")",
+			{	
+				Name: "Send Message",
+				Value:  "[[PM]](https://www.reddit.com/message/compose/?to=" + data.Author + ")",
 				Inline: true,
 			},
 			{
