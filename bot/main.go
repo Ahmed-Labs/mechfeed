@@ -283,8 +283,13 @@ func handleList(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 		var sb strings.Builder
 		for i, alert := range alerts {
 			sb.WriteString(fmt.Sprintf("[%d] %s", i+1, alert.Keyword))
-			if len(alert.Ignored) > 0 {
-				sb.WriteString(fmt.Sprintf(" (ignoring: %s)", strings.Join(alert.Ignored, ",")))
+			num_ignored := len(alert.Ignored)
+			if num_ignored > 0 {
+				sb.WriteString(fmt.Sprintf(" (ignoring %d user", num_ignored))
+				if num_ignored > 1 {
+					sb.WriteString("s")
+				}
+				sb.WriteString(")")
 			}
 			sb.WriteString("\n")
 		}
