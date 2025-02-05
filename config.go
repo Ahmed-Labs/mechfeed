@@ -57,8 +57,8 @@ var ServerList = []Server{
 			{"metal-novelties", "788549951428100136"},
 		},
 	},
-	// {
-	// 	Name:     "Mechfeed",
-	// 	Channels: []Channel{{"mechfeed", "968791988465983518"}},
-	// },
+	{
+		Name:     "Mechfeed",
+		Channels: []Channel{{"mechfeed", "968791988465983518"}},
+	},
 }
