@@ -13,10 +13,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var DEBUG bool
 var (
-    sending_heartbeat   bool
-    sending_heartbeat_mu sync.Mutex
+	debug bool
+	sendingHeartbeat    bool
+	sendingHeartbeatMutex sync.Mutex
 )
 
 func initApp() (GatewayConnection, error) {
@@ -25,7 +25,7 @@ func initApp() (GatewayConnection, error) {
 		return GatewayConnection{}, errors.New("no discord token found")
 	}
 
-	DEBUG = os.Getenv("DEBUG_DISCORD_PORTAL") == "true"
+	debug = os.Getenv("DEBUG_DISCORD_PORTAL") == "true"
 
 	// Establish connection with gateway
 	c, _, err := websocket.DefaultDialer.Dial(GATEWAY_URL, nil)
@@ -44,14 +44,14 @@ func initApp() (GatewayConnection, error) {
 func Listen() {
 	gateway, err := initApp()
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	defer gateway.conn.Close()
-	gateway.on_message()
+	gateway.onMessage()
 	panic("gateway listener execution ended")
 }
 
-func (g *GatewayConnection) on_message() error {
+func (g *GatewayConnection) onMessage() error {
 	for {
 		// Read raw message (json)
 		_, json_msg, err := g.conn.ReadMessage()
@@ -63,7 +63,7 @@ func (g *GatewayConnection) on_message() error {
 				panic(err)
 			} else {
 				log.Println("Attempting to resume connection...")
-				g.resume_connection()
+				g.resumeConnection()
 			}
 			continue
 		}
@@ -74,7 +74,7 @@ func (g *GatewayConnection) on_message() error {
 		if event.Sequence != nil {
 			g.sequence = *(event.Sequence)
 		}
-		if DEBUG {
+		if debug {
 			if event.Name != READY {
 				log.Println(string(json_msg))
 			} else {
@@ -83,18 +83,18 @@ func (g *GatewayConnection) on_message() error {
 		}
 
 		if event.OP == OP_RECONNECT {
-			g.resume_connection()
-			go g.send_heartbeat()
+			g.resumeConnection()
+			go g.sendHeartbeat()
 		}
 		if event.OP == OP_HELLO {
 			var payload GatewayHelloPayload
 			unmarshalJSON(json_msg, &payload)
 			g.is_connected = true
 			g.heartbeat_interval = payload.Data.HeartbeatInterval
-			go g.send_heartbeat()
+			go g.sendHeartbeat()
 		}
 		if !g.is_identified && event.OP == OP_HEARTBEAT_ACK {
-			err := g.send_identify()
+			err := g.sendIdentify()
 			if err != nil {
 				log.Println(err.Error())
 			} else {
@@ -128,16 +128,16 @@ func (g *GatewayConnection) on_message() error {
 	}
 }
 
-func (g *GatewayConnection) send_heartbeat() {
-	sending_heartbeat_mu.Lock()
-	start := !sending_heartbeat
-	sending_heartbeat = true
-	sending_heartbeat_mu.Unlock()
+func (g *GatewayConnection) sendHeartbeat() {
+	sendingHeartbeatMutex.Lock()
+	start := !sendingHeartbeat
+	sendingHeartbeat = true
+	sendingHeartbeatMutex.Unlock()
 
 	if !start {
-		return;
+		return
 	}
-	go func(){
+	go func() {
 		log.Println("Started heartbeat")
 		for g.is_connected {
 			heartbeat_payload := GatewayHeartbeat{
@@ -153,14 +153,14 @@ func (g *GatewayConnection) send_heartbeat() {
 			log.Println("Sent heartbeat")
 			time.Sleep(time.Duration(g.heartbeat_interval) * time.Millisecond)
 		}
-		sending_heartbeat_mu.Lock()
-		sending_heartbeat = false
-		sending_heartbeat_mu.Unlock()
+		sendingHeartbeatMutex.Lock()
+		sendingHeartbeat = false
+		sendingHeartbeatMutex.Unlock()
 		log.Println("Stopped heartbeat")
 	}()
 }
 
-func (g GatewayConnection) send_identify() error {
+func (g GatewayConnection) sendIdentify() error {
 	identify_payload := GatewayIdentifyPayload{
 		GatewayEvent: GatewayEvent{OP: OP_IDENTIFY},
 		Data: GatewayIdentifyData{
@@ -180,7 +180,7 @@ func (g GatewayConnection) send_identify() error {
 	return nil
 }
 
-func (g *GatewayConnection) resume_connection() error {
+func (g *GatewayConnection) resumeConnection() error {
 	g.conn.Close()
 	g.is_connected = false
 	c, _, err := websocket.DefaultDialer.Dial(g.resume_gateway_url, nil)

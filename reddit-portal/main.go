@@ -15,36 +15,36 @@ import (
 )
 
 const (
-	REDDIT_AUTH_ENDPOINT = "https://www.reddit.com/api/v1/access_token"
-	REDDIT_POST_ENDPOINT = "https://oauth.reddit.com/r/mechmarket/new.json"
-	IMGUR_ALBUM_ENDPOINT = "https://api.imgur.com/post/v1/albums/"
+	redditAuthEndpoint   = "https://www.reddit.com/api/v1/accessToken"
+	redditPostEndpoint = "https://oauth.reddit.com/r/mechmarket/new.json"
+	imgurAlbumEndpoint = "https://api.imgur.com/post/v1/albums/"
 )
 
 var (
-	DEBUG                bool
-	REDDIT_CLIENT_ID     string
-	REDDIT_CLIENT_SECRET string
-	REDDIT_AUTH          RedditAuth
+	debug              bool
+	redditClientID     string
+	redditClientSecret string
+	globalRedditAuth   RedditAuth
 )
 
 type RedditAuth struct {
-	access_token string
-	expires_at   time.Time
+	accessToken string
+	expiresAt   time.Time
 }
 
-func init_app() error {
-	DEBUG = os.Getenv("DEBUG_REDDIT_PORTAL") == "true"
-	REDDIT_CLIENT_ID = os.Getenv("REDDIT_CLIENT_ID")
-	REDDIT_CLIENT_SECRET = os.Getenv("REDDIT_CLIENT_SECRET")
+func initApp() error {
+	debug = os.Getenv("DEBUG_REDDIT_PORTAL") == "true"
+	redditClientID = os.Getenv("REDDIT_CLIENT_ID")
+	redditClientSecret = os.Getenv("REDDIT_CLIENT_SECRET")
 
-	if REDDIT_CLIENT_ID == "" {
+	if redditClientID == "" {
 		return errors.New("no reddit client id found")
 	}
-	if REDDIT_CLIENT_SECRET == "" {
+	if redditClientSecret == "" {
 		return errors.New("no reddit client secret found")
 	}
 	var err error
-	REDDIT_AUTH, err = get_reddit_auth()
+	globalRedditAuth, err = redditAuth()
 
 	if err != nil {
 		return err
@@ -54,25 +54,25 @@ func init_app() error {
 
 func Monitor() {
 	var err error
-	if err = init_app(); err != nil {
+	if err = initApp(); err != nil {
 		log.Fatal(err)
 	}
 	defer panic("exited redditportal")
 
 	var currID string
-	check_expiry := 300
+	checkExpiry := 300
 
 	for {
-		if check_expiry <= 0 && time.Now().After(REDDIT_AUTH.expires_at) {
-			REDDIT_AUTH, err = get_reddit_auth()
-			check_expiry = 300
+		if checkExpiry <= 0 && time.Now().After(globalRedditAuth.expiresAt) {
+			globalRedditAuth, err = redditAuth()
+			checkExpiry = 300
 			if err != nil {
 				log.Println("failed to refresh reddit access token")
 			} else {
 				log.Println("refreshed reddit access token")
 			}
 		}
-		check_expiry--
+		checkExpiry--
 		time.Sleep(2 * time.Second)
 		var res RedditResponse
 
@@ -104,16 +104,16 @@ func Monitor() {
 	}
 }
 
-func get_reddit_auth() (RedditAuth, error) {
+func redditAuth() (RedditAuth, error) {
 	client := &http.Client{}
-	auth_payload := strings.NewReader("grant_type=client_credentials")
-	req, err := http.NewRequest("POST", REDDIT_AUTH_ENDPOINT, auth_payload)
+	authPayload := strings.NewReader("grant_type=client_credentials")
+	req, err := http.NewRequest("POST", redditAuthEndpoint, authPayload)
 
 	if err != nil {
 		return RedditAuth{}, err
 	}
 
-	req.SetBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+	req.SetBasicAuth(redditClientID, redditClientSecret)
 	req.Header.Set("User-Agent", "mechfeed/0.1")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -128,31 +128,32 @@ func get_reddit_auth() (RedditAuth, error) {
 		return RedditAuth{}, err
 	}
 
-	var auth_info struct {
+	// reddit's auth json response
+	var authInfoResponse struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 		Error       string `json:"error"`
 	}
 
-	json.Unmarshal(data, &auth_info)
+	json.Unmarshal(data, &authInfoResponse)
 
-	if auth_info.Error != "" {
-		return RedditAuth{}, errors.New(auth_info.Error)
+	if authInfoResponse.Error != "" {
+		return RedditAuth{}, errors.New(authInfoResponse.Error)
 	}
 
-	expiration_time := time.Now().Add(time.Duration(int(float64(auth_info.ExpiresIn)*0.9)) * time.Second)
+	expirationTime := time.Now().Add(time.Duration(int(float64(authInfoResponse.ExpiresIn)*0.9)) * time.Second)
 
-	return RedditAuth{access_token: auth_info.AccessToken, expires_at: expiration_time}, nil
+	return RedditAuth{accessToken: authInfoResponse.AccessToken, expiresAt: expirationTime}, nil
 }
 
 func getLatest(result *RedditResponse) error {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", REDDIT_POST_ENDPOINT, nil)
+	req, err := http.NewRequest("GET", redditPostEndpoint, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "mechfeed/0.1")
-	req.Header.Set("Authorization", "Bearer " + REDDIT_AUTH.access_token)
+	req.Header.Set("Authorization", "Bearer "+globalRedditAuth.accessToken)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -169,7 +170,7 @@ func getLatest(result *RedditResponse) error {
 	if err != nil {
 		return err
 	}
-	if DEBUG {
+	if debug {
 		extract_pretified_json(bodyText)
 	}
 	if err := json.Unmarshal(bodyText, result); err != nil {
@@ -229,7 +230,7 @@ func extract_imgur_links(postBody string) []string {
 
 func get_imgur_thumbnail(imgurAlbumID string) []string {
 	client := &http.Client{}
-	reqURL := IMGUR_ALBUM_ENDPOINT + imgurAlbumID + "?client_id=546c25a59c58ad7&include=media%2Cadconfig%2Caccount"
+	reqURL := imgurAlbumEndpoint + imgurAlbumID + "?client_id=546c25a59c58ad7&include=media%2Cadconfig%2Caccount"
 	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		log.Println(err)
