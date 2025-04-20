@@ -47,11 +47,11 @@ func main() {
 	}
 
 	// Get user DB connection
-	repo, err := users.DBConnection()
+	conn, err := users.DatabaseConnection()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer repo.Db.Close()
+	defer conn.Db.Close()
 
 	// Intiialize sentry
 	err = sentry.Init(sentry.ClientOptions{
@@ -64,19 +64,19 @@ func main() {
 	defer sentry.Flush(2 * time.Second)
 
 	// Mechfeed client discord bot
-	go bot.MechfeedBot()
+	go bot.Run()
 
 	// Wrapped goroutines for Discord & Reddit monitors
-	go runPortal(discordportal.Listen, "discordportal", time.Millisecond*300)
-	go runPortal(redditportal.Monitor, "redditportal", time.Millisecond*300)
+	go runPortal(discordportal.Run, "discordportal", time.Millisecond*300)
+	go runPortal(redditportal.Run, "redditportal", time.Millisecond*300)
 
 	for {
 		select {
 		case discord_msg := <-channels.DiscordChannel:
-			go discordHandler(repo, discord_msg)
+			go discordHandler(conn, discord_msg)
 
 		case reddit_msg := <-channels.RedditChannel:
-			go redditHandler(repo, reddit_msg)
+			go redditHandler(conn, reddit_msg)
 		}
 	}
 }
@@ -102,7 +102,7 @@ func runPortal(portal func(), name string, restartDelay time.Duration) {
 	}
 }
 
-func discordHandler(r *users.Repository, msg channels.DiscordMessage) {
+func discordHandler(r *users.Connection, msg channels.DiscordMessage) {
 	_, ok := discordChannels[msg.ChannelID]
 	if !ok {
 		return // Channel not being monitored
@@ -123,7 +123,7 @@ func discordHandler(r *users.Repository, msg channels.DiscordMessage) {
 	}
 }
 
-func redditHandler(r *users.Repository, msg channels.RedditMessage) {
+func redditHandler(r *users.Connection, msg channels.RedditMessage) {
 	// Notify public mechmarket channel
 	if publicMechmarketWebhookURL != "" {
 		notifications.SendWebhook(publicMechmarketWebhookURL, notifications.CreateNotificationReddit(msg))
@@ -144,7 +144,7 @@ func redditHandler(r *users.Repository, msg channels.RedditMessage) {
 	}
 }
 
-func notifyDiscordMessage(r *users.Repository, msg channels.DiscordMessage, alert users.UserAlert) {
+func notifyDiscordMessage(r *users.Connection, msg channels.DiscordMessage, alert users.UserAlert) {
 	msg_server := discordServers[msg.ChannelID]
 	msg_channel := discordChannels[msg.ChannelID]
 
@@ -182,7 +182,7 @@ func notifyDiscordMessage(r *users.Repository, msg channels.DiscordMessage, aler
 	}
 }
 
-func notifyRedditMessage(r *users.Repository, msg channels.RedditMessage, alert users.UserAlert) {
+func notifyRedditMessage(r *users.Connection, msg channels.RedditMessage, alert users.UserAlert) {
 	// Get user that set alert
 	user, err := r.Queries.GetUser(r.Ctx, alert.ID)
 	if err != nil {

@@ -8,29 +8,29 @@ import (
 	"os"
 )
 
-type Repository struct {
+type Connection struct {
 	Db         	*sql.DB
 	Ctx         context.Context
 	Queries     *Queries
 }
 
 var (
-	POSTGRES_CONNECTION string
-	Repo *Repository
+	postgresConnectionURL string
+	Conn *Connection
 )
 
-func DBConnection() (*Repository, error) {
-	if Repo != nil {
-		return Repo, nil
+func DatabaseConnection() (*Connection, error) {
+	if Conn != nil {
+		return Conn, nil
 	}
 	// Load connection string
-	POSTGRES_CONNECTION = os.Getenv("POSTGRES_CONNECTION")
-	if POSTGRES_CONNECTION == "" {
+	postgresConnectionURL = os.Getenv("POSTGRES_CONNECTION")
+	if postgresConnectionURL == "" {
 		return nil, errors.New("no postgres connection string found")
 	}
 
 	// Open DB
-	db, err := sql.Open("postgres", POSTGRES_CONNECTION)
+	db, err := sql.Open("postgres", postgresConnectionURL)
 	if err != nil {
 		return nil, err
 	}
@@ -43,10 +43,10 @@ func DBConnection() (*Repository, error) {
 
 	log.Println("Successfully connected to database")
 
-	Repo = &Repository{
+	Conn = &Connection{
 		Db:      db,
 		Ctx:     context.Background(),
 		Queries: New(db),
 	}
-	return Repo, nil
+	return Conn, nil
 }

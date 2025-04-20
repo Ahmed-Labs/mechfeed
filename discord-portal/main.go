@@ -41,7 +41,7 @@ func initApp() (GatewayConnection, error) {
 }
 
 // Connect to discord gateway websocket server and pipe messages through channel
-func Listen() {
+func Run() {
 	gateway, err := initApp()
 	if err != nil {
 		log.Panic(err)

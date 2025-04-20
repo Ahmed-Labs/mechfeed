@@ -34,6 +34,7 @@ type RedditAuth struct {
 
 func initApp() error {
 	debug = os.Getenv("DEBUG_REDDIT_PORTAL") == "true"
+	_ = debug
 	redditClientID = os.Getenv("REDDIT_CLIENT_ID")
 	redditClientSecret = os.Getenv("REDDIT_CLIENT_SECRET")
 
@@ -52,7 +53,7 @@ func initApp() error {
 	return nil
 }
 
-func Monitor() {
+func Run() {
 	var err error
 	if err = initApp(); err != nil {
 		log.Fatal(err)
@@ -76,8 +77,8 @@ func Monitor() {
 		time.Sleep(2 * time.Second)
 		var res RedditResponse
 
-		if err := getLatest(&res); err != nil {
-			log.Print(err.Error())
+		if err := getNewPosts(&res); err != nil {
+			log.Println(err.Error())
 			continue
 		}
 		log.Println("Monitoring...")
@@ -94,7 +95,7 @@ func Monitor() {
 		for i := len(res.Data.Children) - 1; i >= 0; i-- {
 			post := res.Data.Children[i].Data
 			if postPivot {
-				process_reddit_post(post)
+				processRedditPost(post)
 			} else if post.ID == currID {
 				postPivot = true
 				continue
@@ -146,7 +147,7 @@ func redditAuth() (RedditAuth, error) {
 	return RedditAuth{accessToken: authInfoResponse.AccessToken, expiresAt: expirationTime}, nil
 }
 
-func getLatest(result *RedditResponse) error {
+func getNewPosts(result *RedditResponse) error {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", redditPostEndpoint, nil)
 	if err != nil {
@@ -170,17 +171,14 @@ func getLatest(result *RedditResponse) error {
 	if err != nil {
 		return err
 	}
-	if debug {
-		extract_pretified_json(bodyText)
-	}
 	if err := json.Unmarshal(bodyText, result); err != nil {
 		return err
 	}
 	return nil
 }
 
-func process_reddit_post(post RawRedditPost) {
-	imgurLinks := extract_imgur_links(post.HTMLText)
+func processRedditPost(post RawRedditPost) {
+	imgurLinks := extractImgurLinks(post.HTMLText)
 	var imgurAlbumLink string = "No Imgur link found"
 	var thumbnailLink string
 
@@ -192,7 +190,7 @@ func process_reddit_post(post RawRedditPost) {
 			thumbnailLink = imgurLinks[0]
 		} else {
 			imgurAlbumID := splitLinkDash[len(splitLinkDash)-1]
-			albumImages := get_imgur_thumbnail(imgurAlbumID)
+			albumImages := getImgurThumbnail(imgurAlbumID)
 			if len(albumImages) > 0 {
 				thumbnailLink = albumImages[0]
 			}
@@ -215,7 +213,7 @@ func process_reddit_post(post RawRedditPost) {
 	}
 }
 
-func extract_imgur_links(postBody string) []string {
+func extractImgurLinks(postBody string) []string {
 	regexPattern := `href="([^"]*imgur[^"]*)"`
 	regex, _ := regexp.Compile(regexPattern)
 	matches := regex.FindAllStringSubmatch(postBody, -1)
@@ -228,7 +226,7 @@ func extract_imgur_links(postBody string) []string {
 	return imgurLinks
 }
 
-func get_imgur_thumbnail(imgurAlbumID string) []string {
+func getImgurThumbnail(imgurAlbumID string) []string {
 	client := &http.Client{}
 	reqURL := imgurAlbumEndpoint + imgurAlbumID + "?client_id=546c25a59c58ad7&include=media%2Cadconfig%2Caccount"
 	req, err := http.NewRequest("GET", reqURL, nil)
@@ -261,16 +259,4 @@ func get_imgur_thumbnail(imgurAlbumID string) []string {
 		albumImageURLs = append(albumImageURLs, albumImages.Media[i].URL)
 	}
 	return albumImageURLs
-}
-
-func extract_pretified_json(bodyText []byte) {
-	var jsonData interface{}
-
-	if err := json.Unmarshal(bodyText, &jsonData); err != nil {
-		log.Fatal(err)
-	}
-
-	file, _ := json.MarshalIndent(jsonData, "", " ")
-
-	_ = os.WriteFile("test.json", file, 0644)
 }

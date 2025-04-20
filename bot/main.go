@@ -27,7 +27,7 @@ func init_bot() error {
 	return nil
 }
 
-func MechfeedBot() {
+func Run() {
 	err := init_bot()
 	if err != nil {
 		fmt.Println("error starting mechfeed bot,", err)
@@ -63,7 +63,6 @@ func MechfeedBot() {
 var commands = map[string]func(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
 	"!help": handleHelp,
 	"!start": handleOnboard,
-	// "!info": handleInfo,
 }
 
 var protected_commands = map[string]func(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
@@ -114,14 +113,14 @@ func messageReact(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		fmt.Println("No alert found, skipping user ignore...")
 	}
 
-	repo, err := users.DBConnection()
+	conn, err := users.DatabaseConnection()
 	if err != nil {
 		fmt.Println("Failed to get DB connection.")
 		SendTextDM(s, r.UserID, "Failed add user to ignore list for your alert. Please contact dev or try again later!")
 		return
 	}
 
-	err = repo.Queries.IgnoreUserForAlert(repo.Ctx, users.IgnoreUserForAlertParams{
+	err = conn.Queries.IgnoreUserForAlert(conn.Ctx, users.IgnoreUserForAlertParams{
 		Ignored: []string{ignored_author},
 		ID: r.UserID,
 		Keyword: strings.ReplaceAll(alert, "`", ""),
@@ -152,8 +151,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			SendTextDM(s, m.Author.ID, err.Error())
 		}
 	} else if handler, ok := protected_commands[cmd]; ok {
-		repo, _ := users.DBConnection()
-		exists, _ := repo.Queries.GetUserExistence(repo.Ctx, m.Author.ID)
+		conn, _ := users.DatabaseConnection()
+		exists, _ := conn.Queries.GetUserExistence(conn.Ctx, m.Author.ID)
 		if exists == 0 {
 			SendTextDM(s, m.Author.ID, "Please use the `!start` command before using alert features.")
 			return
@@ -235,11 +234,6 @@ func handleHelp(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 	return nil
 }
 
-// func handleInfo(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-// 	SendTextDM(s, m.Author.ID, "Info about Mechfeed: ...")
-// 	return nil
-// }
-
 func handleOnboard(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
 	// Send the onboarding embed
 	embeds := []*discordgo.MessageEmbed{
@@ -248,12 +242,12 @@ func handleOnboard(s *discordgo.Session, m *discordgo.MessageCreate, args []stri
 	}
 	SendMultipleEmbedsDM(s, m.Author.ID, embeds)
 
-	repo, err := users.DBConnection()
+	conn, err := users.DatabaseConnection()
 	if err != nil {
 		fmt.Println("failed to get DB connection.")
 		return nil
 	}
-	repo.Queries.CreateUser(repo.Ctx, users.CreateUserParams{
+	conn.Queries.CreateUser(conn.Ctx, users.CreateUserParams{
 		ID: m.Author.ID,
 		Username: m.Author.Username,
 	})
@@ -261,14 +255,14 @@ func handleOnboard(s *discordgo.Session, m *discordgo.MessageCreate, args []stri
 }
  
 func handleList(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	repo, err := users.DBConnection()
+	conn, err := users.DatabaseConnection()
 	if err != nil {
 		fmt.Println("failed to get DB connection.")
 		SendTextDM(s, m.Author.ID, "Failed to get alerts. Please contact dev or try again later!")
 		return nil
 	}
 
-	alerts, err := repo.Queries.GetUserAlerts(repo.Ctx, m.Author.ID)
+	alerts, err := conn.Queries.GetUserAlerts(conn.Ctx, m.Author.ID)
 	if err != nil {
 		fmt.Println("failed to query DB for alerts")
 		SendTextDM(s, m.Author.ID, "Failed to get alerts. Please contact dev or try again later!")
@@ -300,7 +294,7 @@ func handleList(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 }
 
 func handleAdd(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	repo, err := users.DBConnection()
+	conn, err := users.DatabaseConnection()
 	if err != nil {
 		fmt.Println("failed to get DB connection.")
 		return errors.New("failed to add alerts, please contact dev or try again later")
@@ -312,7 +306,7 @@ func handleAdd(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 
 	failure := false
 	for _, arg := range args {
-		err := repo.Queries.CreateAlert(repo.Ctx, users.CreateAlertParams{
+		err := conn.Queries.CreateAlert(conn.Ctx, users.CreateAlertParams{
 			ID: m.Author.ID,
 			Keyword: arg,
 		})
@@ -338,7 +332,7 @@ func handleAdd(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 
 
 func handleDelete(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	repo, err := users.DBConnection()
+	conn, err := users.DatabaseConnection()
 	if err != nil {
 		fmt.Println("failed to get DB connection.")
 		return errors.New("failed to delete alerts, please contact dev or try again later")
@@ -348,7 +342,7 @@ func handleDelete(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 		return errors.New("no input provided")
 	}
 
-	alerts, err := repo.Queries.GetUserAlerts(repo.Ctx, m.Author.ID)
+	alerts, err := conn.Queries.GetUserAlerts(conn.Ctx, m.Author.ID)
 	if err != nil {
 		fmt.Println("failed to query DB for alerts before deletion")
 		return errors.New("failed to delete alerts, please contact dev or try again later")
@@ -360,7 +354,7 @@ func handleDelete(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 	}
 
 	if args[0] == "all" {
-		err := repo.Queries.DeleteAllAlerts(repo.Ctx, m.Author.ID)
+		err := conn.Queries.DeleteAllAlerts(conn.Ctx, m.Author.ID)
 
 		if err != nil {
 			SendTextDM(s, m.Author.ID, "Failed to delete all alerts")
@@ -385,7 +379,7 @@ func handleDelete(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 		if !ok {
 			continue
 		}
-		err := repo.Queries.DeleteAlert(repo.Ctx, alert_id)
+		err := conn.Queries.DeleteAlert(conn.Ctx, alert_id)
 		if err != nil {
 			continue
 		}
