@@ -16,12 +16,12 @@ type Connection struct {
 
 var (
 	postgresConnectionURL string
-	Conn *Connection
+	conn *Connection
 )
 
 func DatabaseConnection() (*Connection, error) {
-	if Conn != nil {
-		return Conn, nil
+	if conn != nil {
+		return conn, nil
 	}
 	// Load connection string
 	postgresConnectionURL = os.Getenv("POSTGRES_CONNECTION")
@@ -43,10 +43,10 @@ func DatabaseConnection() (*Connection, error) {
 
 	log.Println("Successfully connected to database")
 
-	Conn = &Connection{
+	conn = &Connection{
 		Db:      db,
 		Ctx:     context.Background(),
 		Queries: New(db),
 	}
-	return Conn, nil
+	return conn, nil
 }

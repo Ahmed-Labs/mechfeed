@@ -3,10 +3,10 @@ package redditportal
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"mechfeed/channels"
-	"mechfeed/fetch-errors"
 	"net/http"
 	"os"
 	"regexp"
@@ -161,10 +161,7 @@ func getNewPosts(result *RedditResponse) error {
 		return err
 	}
 	if resp.StatusCode != 200 {
-		return fetcherrors.FetchError{
-			Code:    resp.StatusCode,
-			Message: resp.Status,
-		}
+		return fmt.Errorf("%d status: %s", resp.StatusCode, resp.Status)
 	}
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
